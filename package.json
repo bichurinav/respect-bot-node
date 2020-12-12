@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "mongoose": "^5.11.7",
     "node-vk-bot-api": "^3.3.7"
   },
   "devDependencies": {
