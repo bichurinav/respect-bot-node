@@ -10,13 +10,11 @@ const session = new Session();
 const mongoose = require('mongoose');
 const room = require('./schema/room');
 
-
 async function start() {
     try {
         // Подключение к базе данных
         const db = await mongoose.connect(dbURL, {useNewUrlParser: true, useUnifiedTopology: true});
         bot.use(session.middleware());
-
         async function getNeededUser(user, conversationID) {
             // Получаем всех пользователей беседы
             const conversation = await bot.execute('messages.getConversationMembers', {
@@ -24,13 +22,9 @@ async function start() {
             });
             // Получаем нужного пользователя
             return conversation.profiles.filter((profile) => {
-                return new RegExp(user, 'i').test(profile.last_name);
+                return new RegExp(user, 'i').test(profile.screen_name);
             })[0];
         }
-        function capitalizeUser(user) {
-            return user[0].toUpperCase() + user.slice(1);
-        }
-
         function findState(ctx, ru = false) {
             if (ru) {
                 let stateRU = ctx.message.text.match(/(респект|репорт)/ig)[0];
@@ -41,6 +35,46 @@ async function start() {
         }
         function findStatus(ctx) {
             return ctx.message.text.match(/(status|st)/ig)[0]
+        }
+        // Получает мин. сек. мс.
+        function getTime(unix) {
+            const date = new Date(unix * 1000);
+            return {
+                m: date.getMinutes(),
+                s: date.getSeconds(),
+                ms: new Date().getMilliseconds()
+            }
+        }
+        // Против спама
+        function antiSpam(ctx, delay = 30) {
+            ctx.session.userTime = ctx.session.userTime || getTime(ctx.message.date);
+            ctx.session.warn = ctx.session.warn || 'warn';
+            function check(res) {
+                if (res < delay) {
+                    ctx.session.access = false;
+                    if (ctx.session.warn === 'warn') {
+                        ctx.reply(`&#8987; Подождите еще ${delay - (getTime(ctx.message.date).s - ctx.session.userTime.s)} сек.`).then(() => {
+                            ctx.session.warn = 'no-warn';
+                        })
+                    }
+                } else {
+                    ctx.session.warn = 'warn';
+                    ctx.session.userTime = getTime(ctx.message.date);
+                    ctx.session.access = true;
+                }
+            }
+            if (ctx.session.userTime.m === getTime(ctx.message.date).m) {
+                if (ctx.session.userTime.ms !== getTime(ctx.message.date).ms) {
+                    check(getTime(ctx.message.date).s - ctx.session.userTime.s)
+                } else {
+                    ctx.session.userTime = getTime(ctx.message.date);
+                    ctx.session.access = true;
+                }
+            } else {
+                ctx.session.userTime = getTime(ctx.message.date);
+                let res = 60 - ctx.session.userTime.s + getTime(ctx.message.date).s;
+                check(res);
+            }
         }
         //==========================================================================================
         // Активировать бота
@@ -57,10 +91,13 @@ async function start() {
                 ])
             )
         });
+
         //==========================================================================================
         bot.command(/!(report|respect|res|rep)\s\[[\w]+\W@[\w-]+\]\s[a-zа-я0-9\W]+/i, async (ctx) => {
+            antiSpam(ctx, 30);
+            if (!ctx.session.access) return;
             // Пользователя которого ввели
-            const dropUser = ctx.message.text.match(/@[\w-]+/ig)[0];
+            const dropUser = ctx.message.text.match(/@[\w-]+/ig)[0].slice(1);
             // report или respect
             let state = findState(ctx);
             if (state === 'res') state = 'respect';
@@ -70,17 +107,14 @@ async function start() {
             // Получаем отправителя
             const sender = await bot.execute('users.get', {
                 user_ids: ctx.message.from_id
-            })[0];
+            });
+
             // id беседы
             const roomID = ctx.message.peer_id;
             // Пользователь с беседы
-            const neededUser = await getNeededUser(dropUser, roomID);
-
-            return console.log('CLOSED');
+            let neededUser = await getNeededUser(dropUser, roomID);
 
             if (neededUser) {
-                // Получаем ссылку на пользователя
-                const linkUser = neededUser.screen_name;
                 ctx.session.reportFlag = false;
                 // Создаем беседу
                 function createRoomDB() {
@@ -92,17 +126,20 @@ async function start() {
                 // Отправляем результат пользователю
                 function sendMessage(state, sticker, mark) {
                     const flag = ctx.session.reportFlag;
-                    return ctx.reply(`@${linkUser} получил ${state} ${sticker} (${mark}1)${flag ? `, причина: ${reason}` : ``}`)
+                    return ctx.reply(`@${neededUser.screen_name} получил ${state} ${sticker} (${mark}1)${flag ? `, причина: ${reason}` : ``}`)
                 }
                 // Меняем статус пользователя
                 function changeStatus(respect, report) {
                     if (respect / report > 2) {
+                        if (neededUser.sex === 1) return 'Респектабельная';
                         return 'Респектабельный'
                     }
                     if (respect / report >= 1) {
+                        if (neededUser.sex === 1) return 'Ровная';
                         return 'Ровный'
                     }
                     if (report > respect) {
+                        if (neededUser.sex === 1) return 'Вафелька';
                         return 'Вафля'
                     }
                 }
@@ -111,22 +148,22 @@ async function start() {
                 if (!hasRoom[0]) await createRoomDB();
 
                 // Отправитель кидает себе? Надо наказать!
-                if (sender.last_name === neededUser.last_name) {
-                    if (state === 'report') return ctx.reply('Ну ты и клоун &#129313;');
+                if (sender[0].last_name === neededUser.last_name) {
+                    if (state === 'report') return ctx.reply(`@${neededUser.screen_name}, ну ты и &#129313;`);
                     state = 'report';
                     reason = 'любопытный';
                     ctx.session.reportFlag = true;
                 }
 
-                const hasUser = await room.find({room: roomID, 'list.user': neededUser.last_name});
+                const hasUser = await room.find({room: roomID, 'list.user': neededUser.screen_name});
                 if (!hasUser[0]) {
                     // Пользователя нету в этой беседе, добавляем его
                     if (state === 'respect') {
                         room.updateOne({room: roomID}, {
                             $push: {
                                 list: {
-                                    user: neededUser.last_name,
-                                    status: 'Нормальный',
+                                    user: neededUser.screen_name,
+                                    status: neededUser.sex === 1 ? 'Ровная' : 'Ровный',
                                     respect: 1,
                                     report: 0,
                                     merit: [reason],
@@ -140,8 +177,8 @@ async function start() {
                         room.updateOne({room: roomID}, {
                             $push: {
                                 list: {
-                                    user: neededUser.last_name,
-                                    status: 'Вафля',
+                                    user: neededUser.screen_name,
+                                    status: neededUser.sex === 1 ? 'Вафелька' : 'Вафля',
                                     respect: 0,
                                     report: 1,
                                     merit: [],
@@ -154,13 +191,15 @@ async function start() {
                     }
                 } else {
                     // Пользователь есть уже в этой комнате
-                    const findState = await room.findOne({room: roomID, 'list.user': neededUser.last_name});
-                    let report = findState.list[0].report;
-                    let respect = findState.list[0].respect;
+                    const findState = await room.findOne({room: roomID, 'list.user': neededUser.screen_name});
+                    let report = findState.list.filter((profile) => profile.user === neededUser.screen_name)[0].report;
+                    let respect = findState.list.filter((profile) => profile.user === neededUser.screen_name)[0].respect;
+                    let merit = findState.list.filter((profile) => profile.user === neededUser.screen_name)[0].merit;
+                    let fail = findState.list.filter((profile) => profile.user === neededUser.screen_name)[0].fail;
                     if (state === 'respect') {
                         respect += 1;
-                        const arMerit = [...findState.list[0].merit, reason];
-                        room.updateOne({room: roomID, 'list.user': neededUser.last_name}, {
+                        const arMerit = [...merit, reason];
+                        room.updateOne({room: roomID, 'list.user': neededUser.screen_name}, {
                             $set: {
                                 'list.$.respect': respect,
                                 'list.$.status': changeStatus(respect, report),
@@ -171,8 +210,8 @@ async function start() {
                         })
                     } else if (state === 'report') {
                         report += 1;
-                        const arFail = [...findState.list[0].fail, reason];
-                        room.updateOne({room: roomID, 'list.user': neededUser.last_name}, {
+                        const arFail = [...fail, reason];
+                        room.updateOne({room: roomID, 'list.user': neededUser.screen_name}, {
                             $set: {
                                 'list.$.report': report,
                                 'list.$.status': changeStatus(respect, report),
@@ -185,7 +224,7 @@ async function start() {
                 }
 
             } else {
-                ctx.reply(`Пользователя ${dropUser} не существует, обратитесь к своему психотерапевту &#129301;`);
+                ctx.reply(`Пользователя @${dropUser} не существует, обратитесь к своему психотерапевту &#129301;`);
             }
         });
         bot.command(/!(report|respect|res|rep)\s\[[\w]+\W@[\w-]+\]/i, async (ctx) => {
@@ -208,28 +247,29 @@ async function start() {
         //==========================================================================================
         // Посмореть статистику пользователя
         bot.command(/^!(status|st)\s\[[\w]+\W@[\w-]+\]$/i, async (ctx) => {
+            const user = ctx.message.text.match(/@[\w-]+/ig)[0].slice(1);
+            const neededUser = await getNeededUser(user, ctx.message.peer_id);
+            if (neededUser) {
+                const roomID = ctx.message.peer_id;
+                const findUser = await room.findOne({room: roomID, 'list.user': neededUser.screen_name});
+                let statusUser = null;
 
-            ctx.reply('ehooo')
-            // const user = ctx.message.text.split(' ')[1];
-            // const neededUser = await getNeededUser(user, ctx.message.peer_id);
-            // if (neededUser) {
-            //     const roomID = ctx.message.peer_id;
-            //     const findUser = await room.findOne({room: roomID, 'list.user': neededUser.last_name});
-            //
-            //     const statusUser = findUser.list.filter(profile => {
-            //         return profile.user === neededUser.last_name;
-            //     })[0];
-            //
-            //     if (!statusUser) return ctx.reply(`&#128203; О пользователе ${capitalizeUser(user)} ничего не слышно...`);
-            //
-            //     const merit = statusUser.merit.join(', ');
-            //     const fail = statusUser.fail.join(', ');
-            //     ctx.reply(
-            //         `${statusUser.user} - ${statusUser.status}\n(Респектов: ${statusUser.respect} | Репортов: ${statusUser.report})\nЗаслуги: ${merit}\nКосяки: ${fail}`
-            //     )
-            // } else {
-            //     ctx.reply(`Пользователя ${user} не существует, обратитесь к своему психотерапевту &#129301;`);
-            // }
+                if (findUser) {
+                    statusUser = findUser.list.filter(profile => {
+                        return profile.user === neededUser.screen_name;
+                    })[0];
+                }
+
+                if (!statusUser) return ctx.reply(`&#128203; О пользователе @${user} ничего не слышно...`);
+
+                const merit = statusUser.merit.join(', ');
+                const fail = statusUser.fail.join(', ');
+                ctx.reply(
+                    `@${statusUser.user} - ${statusUser.status}\n(Респектов: ${statusUser.respect} | Репортов: ${statusUser.report})\nЗаслуги: ${merit}\nКосяки: ${fail}`
+                )
+            } else {
+                ctx.reply(`Пользователя @${user} не существует, обратитесь к своему психотерапевту &#129301;`);
+            }
         });
         bot.command(/!(status|st)/i, async (ctx) => {
             let state = findStatus(ctx);
