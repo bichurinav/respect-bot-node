@@ -3,12 +3,12 @@ const dbURL = 'mongodb+srv://bichurinet:Ab2507011097@respect-bot.o6dm1.mongodb.n
 const VK = require('node-vk-bot-api');
 const Markup = require('node-vk-bot-api/lib/markup');
 const Session = require('node-vk-bot-api/lib/session');
-const fs = require('fs');
-const DB = 'users.json';
 const bot = new VK(token);
 const session = new Session();
 const mongoose = require('mongoose');
 const room = require('./schema/room');
+const iconv = require('iconv-lite');
+const axios = require('axios');
 
 async function start() {
     try {
@@ -87,11 +87,34 @@ async function start() {
                     ],
                     [
                         Markup.button('Узнать статус пользователя &#128373;&#127998;&#8205;&#9794;&#65039;', 'default'),
+                    ],
+                    [
+                        Markup.button('Анекдот &#128518;', 'default'),
                     ]
                 ])
             )
         });
-
+        //==========================================================================================
+        bot.command(/(анек|анекдот|анекдоты)/i, (ctx) => {
+            async function ajax() {
+                try {
+                    return axios.get(
+                        'http://rzhunemogu.ru/RandJSON.aspx?CType=11',
+                        {
+                            responseType: 'arraybuffer',
+                            responseEncoding: 'binary'
+                        })
+                        .then(response => iconv.decode(Buffer.from(response.data), 'windows-1251'))
+                } catch (e) {
+                    console.log(e)
+                }
+            }
+            ajax(ctx).then(data => {
+                let str = data.replace(/\{"content":"/, '');
+                str = str.split('"}')[0]
+                ctx.reply(str)
+            })
+        })
         //==========================================================================================
         bot.command(/!(report|respect|res|rep)\s\[[\w]+\W@[\w-]+\]\s[a-zа-я0-9\W]+/i, async (ctx) => {
             antiSpam(ctx, 30);
