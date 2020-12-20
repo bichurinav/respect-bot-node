@@ -15,13 +15,14 @@ async function start() {
         // Подключение к базе данных
         const db = await mongoose.connect(dbURL, {useNewUrlParser: true, useUnifiedTopology: true});
         bot.use(session.middleware());
-        async function getNeededUser(user, conversationID) {
+        async function getNeededUser(user, conversationID, userID) {
             // Получаем всех пользователей беседы
             const conversation = await bot.execute('messages.getConversationMembers', {
                 peer_id: conversationID,
             });
             // Получаем нужного пользователя
             return conversation.profiles.filter((profile) => {
+                if (userID) return new RegExp(userID, 'i').test(profile.id);
                 return new RegExp(user, 'i').test(profile.screen_name);
             })[0];
         }
@@ -76,66 +77,29 @@ async function start() {
                 check(res);
             }
         }
-        //==========================================================================================
-        // Активировать бота
-        bot.command('!bot', (ctx) => {
-            ctx.reply('Бот активирован &#128170;', null, Markup
-                .keyboard([
-                    [
-                        Markup.button('Кинуть репорт &#128078;', 'negative'),
-                        Markup.button('Кинуть респект &#129305;', 'positive'),
-                    ],
-                    [
-                        Markup.button('Узнать статус пользователя &#128373;&#127998;&#8205;&#9794;&#65039;', 'default'),
-                    ],
-                    [
-                        Markup.button('Анекдот &#128518;', 'default'),
-                    ]
-                ])
-            )
-        });
-        //==========================================================================================
-        bot.command(/(анек|анекдот|анекдоты)/i, (ctx) => {
-            async function ajax() {
-                try {
-                    return axios.get(
-                        'http://rzhunemogu.ru/RandJSON.aspx?CType=11',
-                        {
-                            responseType: 'arraybuffer',
-                            responseEncoding: 'binary'
-                        })
-                        .then(response => iconv.decode(Buffer.from(response.data), 'windows-1251'))
-                } catch (e) {
-                    console.log(e)
-                }
-            }
-            ajax(ctx).then(data => {
-                let str = data.replace(/\{"content":"/, '');
-                str = str.split('"}')[0]
-                ctx.reply(str)
-            })
-        })
-        //==========================================================================================
-        bot.command(/!(report|respect|res|rep)\s\[[\w]+\W@[\w-]+\]\s[a-zа-я0-9\W]+/i, async (ctx) => {
-            antiSpam(ctx, 30);
+        // Кидает репорт/респект
+        async function sayStateForUser(ctx, reason, dropUser, dropUserID = null) {
+            antiSpam(ctx, 10);
             if (!ctx.session.access) return;
-            // Пользователя которого ввели
-            const dropUser = ctx.message.text.match(/@[\w-]+/ig)[0].slice(1);
-            // report или respect
             let state = findState(ctx);
-            if (state === 'res') state = 'respect';
-            if (state === 'rep') state = 'report';
-            // Причина репорта/респекта
-            let reason = ctx.message.text.split(' ').filter((_, i) => i !== 0 && i !== 1).join(' ');
+            // id беседы
+            const roomID = ctx.message.peer_id;
             // Получаем отправителя
             const sender = await bot.execute('users.get', {
                 user_ids: ctx.message.from_id
             });
-
-            // id беседы
-            const roomID = ctx.message.peer_id;
             // Пользователь с беседы
-            let neededUser = await getNeededUser(dropUser, roomID);
+            let neededUser = null;
+            if (dropUserID !== undefined && dropUser === null) {
+                if (dropUserID.from_id < 0) return ctx.reply(`Cебе кинь &#128545;`);
+                neededUser = await getNeededUser(null, roomID, dropUserID.from_id);
+            } else if (dropUserID === null) {
+                neededUser = await getNeededUser(dropUser, roomID, null);
+            } else {
+                return ctx.reply(`!${state} @id причина`);
+            }
+            if (state === 'res') state = 'respect';
+            if (state === 'rep') state = 'report';
 
             if (neededUser) {
                 ctx.session.reportFlag = false;
@@ -170,7 +134,7 @@ async function start() {
                 const hasRoom = await room.find({room: roomID});
                 if (!hasRoom[0]) await createRoomDB();
 
-                // Отправитель кидает себе? Надо наказать!
+                //Отправитель кидает себе? Надо наказать!
                 if (sender[0].last_name === neededUser.last_name) {
                     if (state === 'report') return ctx.reply(`@${neededUser.screen_name}, ну ты и &#129313;`);
                     state = 'report';
@@ -189,7 +153,7 @@ async function start() {
                                     status: neededUser.sex === 1 ? 'Ровная' : 'Ровный',
                                     respect: 1,
                                     report: 0,
-                                    merit: [reason],
+                                    merit: [reason ? reason : ''],
                                     fail: []
                                 }
                             }
@@ -205,7 +169,7 @@ async function start() {
                                     respect: 0,
                                     report: 1,
                                     merit: [],
-                                    fail: [reason]
+                                    fail: [reason ? reason : '']
                                 }
                             }
                         }).then(() => {
@@ -221,7 +185,10 @@ async function start() {
                     let fail = findState.list.filter((profile) => profile.user === neededUser.screen_name)[0].fail;
                     if (state === 'respect') {
                         respect += 1;
-                        const arMerit = [...merit, reason];
+                        let arMerit = [...merit];
+                        if (reason) {
+                            arMerit = [...merit, reason];
+                        }
                         room.updateOne({room: roomID, 'list.user': neededUser.screen_name}, {
                             $set: {
                                 'list.$.respect': respect,
@@ -233,7 +200,10 @@ async function start() {
                         })
                     } else if (state === 'report') {
                         report += 1;
-                        const arFail = [...fail, reason];
+                        let arFail = [...fail];
+                        if (reason) {
+                            arFail = [...fail, reason]
+                        }
                         room.updateOne({room: roomID, 'list.user': neededUser.screen_name}, {
                             $set: {
                                 'list.$.report': report,
@@ -249,23 +219,66 @@ async function start() {
             } else {
                 ctx.reply(`Пользователя @${dropUser} не существует, обратитесь к своему психотерапевту &#129301;`);
             }
+        }
+
+        //==========================================================================================
+        // Активировать бота
+        bot.command('!bot', (ctx) => {
+            ctx.reply('Бот активирован &#128170;', null, Markup
+                .keyboard([
+                    [
+                        Markup.button('Анекдот &#128518;', 'default'),
+                    ]
+                ])
+            )
+        });
+        //==========================================================================================
+        bot.command(/(анек|анекдот|анекдоты)/, (ctx) => {
+            antiSpam(ctx, 10);
+            if (!ctx.session.access) return;
+            async function getAnecdote() {
+                try {
+                    return axios.get(
+                        'http://rzhunemogu.ru/RandJSON.aspx?CType=11',
+                        {
+                            responseType: 'arraybuffer',
+                            responseEncoding: 'binary'
+                        })
+                        .then(response => iconv.decode(Buffer.from(response.data), 'windows-1251'))
+                } catch (e) {
+                    console.log(e)
+                }
+            }
+            getAnecdote(ctx).then(data => {
+                let str = data.replace(/\{"content":"/, '');
+                str = str.split('"}')[0]
+                ctx.reply(str)
+            })
+        })
+        //==========================================================================================
+        bot.command(/!(report|respect|res|rep)\s\[[\w]+\W@[\w-]+\]\s[a-zа-я0-9\W]+/i, async (ctx) => {
+            antiSpam(ctx, 15);
+            if (!ctx.session.access) return;
+            // Пользователя которого ввели
+            const dropUser = ctx.message.text.match(/@[\w-]+/ig)[0].slice(1);
+            // Причина репорта/респекта
+            let reason = ctx.message.text.split(' ').filter((_, i) => i !== 0 && i !== 1).join(' ');
+            sayStateForUser(ctx, reason, dropUser);
         });
         bot.command(/!(report|respect|res|rep)\s\[[\w]+\W@[\w-]+\]/i, async (ctx) => {
             let state = findState(ctx);
             ctx.reply(`!${state} @id причина`);
         });
+        bot.command(/!(report|respect|res|rep)\s[a-zа-я0-9\W]+/i, async (ctx) => {
+            let dropUserID = ctx.message.fwd_messages[0];
+            // Причина репорта/респекта
+            let reason = ctx.message.text.split(' ').filter((_, i) => i !== 0).join(' ');
+            sayStateForUser(ctx, reason, null, dropUserID);
+
+        });
         bot.command(/!(report|respect|res|rep)/i, async (ctx) => {
-            let state = findState(ctx);
-            ctx.reply(`!${state} @id причина`);
-        });
-        // триггер на кнопки: Кинуть респект/репорт
-        bot.command(/@respecto_bot\]\sкинуть\s(респект|репорт)/ig, async (ctx) => {
-            let state = findState(ctx, true);
-            ctx.reply(`!${state} @id причина`);
-        });
-        bot.command(/кинуть\s(респект|репорт)/ig, async (ctx) => {
-            let state = findState(ctx, true);
-            ctx.reply(`!${state} @id причина`);
+            let dropUserID = ctx.message.fwd_messages[0];
+            sayStateForUser(ctx, null, null, dropUserID);
         });
         //==========================================================================================
         // Посмореть статистику пользователя
