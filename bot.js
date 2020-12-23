@@ -1,4 +1,5 @@
 const token = '3ec3b314f796362aeb91c65e4bab6a0cb8239ae9c5fb935fb26e7437e8a93817541ecec224eb6e459f3c4';
+//const token = '182f77a3b037809fa502f43e46a6ee81c008f3717cbd2d16e5a0585528bb7536260e831e27f43a99e0f69';
 const dbURL = 'mongodb+srv://bichurinet:Ab2507011097@respect-bot.o6dm1.mongodb.net/respect-bot?retryWrites=true&w=majority';
 const VK = require('node-vk-bot-api');
 const Markup = require('node-vk-bot-api/lib/markup');
@@ -45,6 +46,12 @@ async function start() {
                 s: date.getSeconds(),
                 ms: new Date().getMilliseconds()
             }
+        }
+        // Рандомное число
+        function getRandomInt(min, max) {
+            min = Math.ceil(min);
+            max = Math.floor(max);
+            return Math.floor(Math.random() * (max - min)) + min;
         }
         // Против спама
         function antiSpam(ctx, delay = 30) {
@@ -113,7 +120,7 @@ async function start() {
                 // Отправляем результат пользователю
                 function sendMessage(state, sticker, mark) {
                     const flag = ctx.session.reportFlag;
-                    return ctx.reply(`@${neededUser.screen_name} получил ${state} ${sticker} (${mark}1)${flag ? `, причина: ${reason}` : ``}`)
+                    return ctx.reply(`@${neededUser.screen_name}(${neededUser.last_name}) получил ${state} ${sticker} (${mark}1)${flag ? `, причина: ${reason}` : ``}`)
                 }
                 // Меняем статус пользователя
                 function changeStatus(respect, report) {
@@ -136,7 +143,8 @@ async function start() {
 
                 //Отправитель кидает себе? Надо наказать!
                 if (sender[0].last_name === neededUser.last_name) {
-                    if (state === 'report') return ctx.reply(`@${neededUser.screen_name}, ну ты и &#129313;`);
+                    if (state === 'report')
+                        return ctx.reply(`@${neededUser.screen_name}(${neededUser.last_name}), ну ты и &#129313;`);
                     state = 'report';
                     reason = 'любопытный';
                     ctx.session.reportFlag = true;
@@ -220,7 +228,6 @@ async function start() {
                 ctx.reply(`Пользователя @${dropUser} не существует, обратитесь к своему психотерапевту &#129301;`);
             }
         }
-
         //==========================================================================================
         // Активировать бота
         bot.command('!bot', (ctx) => {
@@ -228,9 +235,25 @@ async function start() {
                 .keyboard([
                     [
                         Markup.button('Анекдот &#128518;', 'default'),
+                        Markup.button('Gachi &#127814;', 'default'),
                     ]
                 ])
             )
+        });
+        //==========================================================================================
+        //Gachi
+        bot.command(/(гачи|gachi)/i, async (ctx) => {
+            antiSpam(ctx, 5);
+            if (!ctx.session.access) return;
+            const arGachi = ['&#9794;fuck you&#9794;', '&#9794cock&#9794', '&#9794;fucking slave&#9794;', '&#9794;boss on this gym&#9794;', '&#9794;dungeon master&#9794;', '&#9794;swallow my cum&#9794;', '&#9794;fat cock&#9794;', '&#9794;the semen&#9794;', '&#9794;full master&#9794;', '&#9794;drop of cum&#9794;', '&#9794;Billy&#9794;', '&#9794;do anal&#9794;', '&#9794;get your ass&#9794;', '&#9794;fisting anal&#9794;', '&#9794;long latex cock&#9794;', '&#9794;do finger in ass&#9794;', '&#9794;leatherman&#9794;', '&#9794;dick&#9794;', '&#9794;gay&#9794;', '&#9794;have nice ass&#9794;', '&#9794;boy next door&#9794;', '&#9794;Van&#9794;', '&#9794;leather stuff&#9794;', 'уклонился от gachimuchi'];
+            const conversationID = ctx.message.peer_id;
+            const conversation = await bot.execute('messages.getConversationMembers', {
+                peer_id: conversationID,
+            });
+            if (!conversation) return ctx.reply('Я поломался #(');
+            const randomPerson = conversation.profiles[getRandomInt(0, conversation.profiles.length)];
+            const randomGachi = arGachi[getRandomInt(0, arGachi.length)];
+            ctx.reply(`@${randomPerson.screen_name}(${randomPerson.last_name}) ${randomGachi}`);
         });
         //==========================================================================================
         bot.command(/(анек|анекдот|анекдоты)/, (ctx) => {
@@ -301,7 +324,7 @@ async function start() {
                 const merit = statusUser.merit.join(', ');
                 const fail = statusUser.fail.join(', ');
                 ctx.reply(
-                    `@${statusUser.user} - ${statusUser.status}\n(Респектов: ${statusUser.respect} | Репортов: ${statusUser.report})\nЗаслуги: ${merit}\nКосяки: ${fail}`
+                    `@${statusUser.user}(${neededUser.last_name}) — ${statusUser.status}\n(Респектов: ${statusUser.respect} | Репортов: ${statusUser.report})\nЗаслуги: ${merit}\nКосяки: ${fail}`
                 )
             } else {
                 ctx.reply(`Пользователя @${user} не существует, обратитесь к своему психотерапевту &#129301;`);
