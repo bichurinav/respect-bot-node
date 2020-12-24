@@ -294,7 +294,7 @@ async function start() {
         }
         searchFag('hour', '');
         // searchFag('hour', 'часа');
-        searchFag('test', '');
+        //searchFag('test', '');
 
 
         //==========================================================================================
