@@ -280,26 +280,21 @@ async function start() {
                 }
             }
             switch (dateFormat) {
-                case 'day':
-                    schedule.scheduleJob('0 0 */1 * *', async () => {
-                        sendMessage();
-                    });
-                    break;
                 case 'hour':
-                    schedule.scheduleJob('0 */1 * * *', async () => {
+                    schedule.scheduleJob('0 */6 * * *', async () => {
                         sendMessage();
                     });
                     break;
                 case 'test':
-                    schedule.scheduleJob('*/20 * * * * *', async () => {
+                    schedule.scheduleJob({hour: 22, minute: 30}, async () => {
                         sendMessage();
                     });
                     break;
             }
         }
-        searchFag('day', 'дня');
+        searchFag('hour', '');
         // searchFag('hour', 'часа');
-        // searchFag('test', 'минуты');
+        searchFag('test', '');
 
 
         //==========================================================================================
