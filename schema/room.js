@@ -3,6 +3,12 @@ const Schema = mongoose.Schema;
 
 const roomSchema = new Schema({
     room: Number,
+    // fags: [
+    //     {
+    //         user: String,
+    //         count: Number,
+    //     }
+    // ],
     list: [
         {
             user: String,

@@ -10,6 +10,7 @@ const mongoose = require('mongoose');
 const room = require('./schema/room');
 const iconv = require('iconv-lite');
 const axios = require('axios');
+const schedule = require('node-schedule');
 
 async function start() {
     try {
@@ -114,6 +115,7 @@ async function start() {
                 function createRoomDB() {
                     return room.create({
                         room: roomID,
+                        // fags: [],
                         list: []
                     })
                 }
@@ -241,11 +243,71 @@ async function start() {
             )
         });
         //==========================================================================================
+        async function searchFag(dateFormat, kind) {
+            async function sendMessage() {
+                try {
+                    const arRooms = await room.find({})
+                    if (arRooms.length > 1) {
+                        arRooms.forEach((el) => {
+                            bot.execute('messages.getConversationMembers', {
+                                peer_id: el.room,
+                            }).then(conversation => {
+                                if (conversation.profiles.length < 2) return; // Если в беседе один человек
+                                const randomPerson = conversation.profiles[getRandomInt(0, conversation.profiles.length)];
+                                bot.sendMessage(el.room, '&#128270; Поиск пидораса активирован')
+                                    .then(() => {
+                                        setTimeout(() => {
+                                            bot.sendMessage(el.room, '🎰 Бип-буп-бип...')
+                                                .catch((err) => {
+                                                    console.error(err)
+                                                })
+                                        }, 1500)
+                                        setTimeout(() => {
+                                            bot.sendMessage(el.room, `📸 Пидорас ${kind} найден — @${randomPerson.screen_name}(${randomPerson.last_name})`)
+                                                .catch((err) => {
+                                                    console.error(err)
+                                                })
+                                        }, 4000)
+                                    })
+                                    .catch((err) => {
+                                        console.error(err)
+                                    })
+                            }).catch(err => console.error(err))
+                        });
+                    }
+                } catch (err) {
+                    console.error(err)
+                }
+            }
+            switch (dateFormat) {
+                case 'day':
+                    schedule.scheduleJob('0 0 */1 * *', async () => {
+                        sendMessage();
+                    });
+                    break;
+                case 'hour':
+                    schedule.scheduleJob('0 */1 * * *', async () => {
+                        sendMessage();
+                    });
+                    break;
+                case 'test':
+                    schedule.scheduleJob('*/20 * * * * *', async () => {
+                        sendMessage();
+                    });
+                    break;
+            }
+        }
+        searchFag('day', 'дня');
+        // searchFag('hour', 'часа');
+        // searchFag('test', 'минуты');
+
+
+        //==========================================================================================
         //Gachi
         bot.command(/(гачи|gachi)/i, async (ctx) => {
             antiSpam(ctx, 5);
             if (!ctx.session.access) return;
-            const arGachi = ['&#9794;fuck you&#9794;', '&#9794cock&#9794', '&#9794;fucking slave&#9794;', '&#9794;boss on this gym&#9794;', '&#9794;dungeon master&#9794;', '&#9794;swallow my cum&#9794;', '&#9794;fat cock&#9794;', '&#9794;the semen&#9794;', '&#9794;full master&#9794;', '&#9794;drop of cum&#9794;', '&#9794;Billy&#9794;', '&#9794;do anal&#9794;', '&#9794;get your ass&#9794;', '&#9794;fisting anal&#9794;', '&#9794;long latex cock&#9794;', '&#9794;do finger in ass&#9794;', '&#9794;leatherman&#9794;', '&#9794;dick&#9794;', '&#9794;gay&#9794;', '&#9794;have nice ass&#9794;', '&#9794;boy next door&#9794;', '&#9794;Van&#9794;', '&#9794;leather stuff&#9794;', 'уклонился от gachimuchi'];
+            const arGachi = ['&#9794;fuck you&#9794;', '&#9794;fucking slave&#9794;', '&#9794;boss on this gym&#9794;', '&#9794;dungeon master&#9794;', '&#9794;swallow my cum&#9794;', '&#9794;fat cock&#9794;', '&#9794;the semen&#9794;', '&#9794;full master&#9794;', '&#9794;drop of cum&#9794;', '&#9794;Billy&#9794;', '&#9794;do anal&#9794;', '&#9794;get your ass&#9794;', '&#9794;fisting anal&#9794;', '&#9794;long latex cock&#9794;', '&#9794;do finger in ass&#9794;', '&#9794;leatherman&#9794;', '&#9794;dick&#9794;', '&#9794;gay&#9794;', '&#9794;have nice ass&#9794;', '&#9794;boy next door&#9794;', '&#9794;Van&#9794;', '&#9794;leather stuff&#9794;', 'уклонился от gachimuchi'];
             const conversationID = ctx.message.peer_id;
             const conversation = await bot.execute('messages.getConversationMembers', {
                 peer_id: conversationID,
