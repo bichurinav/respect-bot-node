@@ -12,6 +12,8 @@ const roomSchema = new Schema({
     list: [
         {
             user: String,
+            firstName: String,
+            lastName: String,
             status: String,
             respect: Number,
             report: Number,
