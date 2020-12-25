@@ -263,7 +263,7 @@ async function start() {
                                                 })
                                         }, 1500)
                                         setTimeout(() => {
-                                            bot.sendMessage(el.room, `📸 Пидорас ${kind} найден — @${randomPerson.screen_name}(${randomPerson.last_name})`)
+                                            bot.sendMessage(el.room, `📸 Faggot ${kind} найден — @${randomPerson.screen_name}(${randomPerson.last_name})`)
                                                 .catch((err) => {
                                                     console.error(err)
                                                 })
@@ -293,10 +293,7 @@ async function start() {
             }
         }
         searchFag('hour', '');
-        // searchFag('hour', 'часа');
         //searchFag('test', '');
-
-
         //==========================================================================================
         //Gachi
         bot.command(/(гачи|gachi)/i, async (ctx) => {
