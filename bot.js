@@ -319,7 +319,7 @@ async function start() {
                 1700, 1800, 1900, 2000, 2100, 2200, 2300, 2400, 2500];
             try {
                 const randomGroupVideo = arVideoGroups[getRandomInt(0, arVideoGroups.length)];
-                const offset = getRandomInt(0, arOffset);
+                const offset = getRandomInt(0, arOffset.length);
                 const posts = await api('wall.get', {
                     owner_id: randomGroupVideo,
                     count: 98,
