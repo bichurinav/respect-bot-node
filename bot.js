@@ -1,26 +1,26 @@
-const token = '3ec3b314f796362aeb91c65e4bab6a0cb8239ae9c5fb935fb26e7437e8a93817541ecec224eb6e459f3c4';
-//const token = '182f77a3b037809fa502f43e46a6ee81c008f3717cbd2d16e5a0585528bb7536260e831e27f43a99e0f69';
-const dbURL = 'mongodb+srv://bichurinet:Ab2507011097@respect-bot.o6dm1.mongodb.net/respect-bot?retryWrites=true&w=majority';
 const VK = require('node-vk-bot-api');
 const Markup = require('node-vk-bot-api/lib/markup');
 const Session = require('node-vk-bot-api/lib/session');
-const bot = new VK(token);
 const session = new Session();
 const mongoose = require('mongoose');
 const room = require('./schema/room');
 const iconv = require('iconv-lite');
 const axios = require('axios');
-const schedule = require('node-schedule');
+const config = require('config');
+
+const token = config.get('token');
+const dbURL = config.get('database');
+const bot = new VK(token);
+bot.use(session.middleware());
 
 async function start() {
     try {
         // Подключение к базе данных
-        const db = await mongoose.connect(dbURL, {useNewUrlParser: true, useUnifiedTopology: true});
-        bot.use(session.middleware());
+        await mongoose.connect(dbURL, {useNewUrlParser: true, useUnifiedTopology: true});
         // Получаем нужного пользователя
         async function getNeededUser(ctx, user, conversationID, userID) {
-            // Получаем всех пользователей беседы
             try {
+                // Получаем всех пользователей беседы
                 const conversation = await bot.execute('messages.getConversationMembers', {
                     peer_id: conversationID,
                 });
@@ -43,6 +43,7 @@ async function start() {
                 ctx.reply('&#9762; Произошла ошибка, не могу получить комнаты');
             }
         }
+        // Ищем совпадение команды на респект/репорт
         function findState(ctx, ru = false) {
             if (ru) {
                 let stateRU = ctx.message.text.match(/(респект|репорт)/ig)[0];
@@ -51,6 +52,7 @@ async function start() {
             }
             return ctx.message.text.match(/(report|respect|res|rep)/ig)[0]
         }
+        // Ищем совпадение команды на статус
         function findStatus(ctx) {
             return ctx.message.text.match(/(status|st)/ig)[0]
         }
@@ -111,8 +113,9 @@ async function start() {
             const sender = await bot.execute('users.get', {
                 user_ids: ctx.message.from_id
             });
-            // Пользователь с беседы
+            // Нужный пользователь с беседы
             let neededUser = null;
+
             if (dropUserID !== undefined && dropUser === null) {
                 if (dropUserID) {
                     if (dropUserID.from_id < 0) return ctx.reply(`Cебе кинь &#128545;`);
@@ -134,7 +137,6 @@ async function start() {
                 function createRoomDB() {
                     return room.create({
                         room: roomID,
-                        // fags: [],
                         list: []
                     })
                 }
@@ -173,7 +175,7 @@ async function start() {
 
                 const hasUser = await room.find({room: roomID, 'list.user': neededUser.screen_name});
                 if (!hasUser[0]) {
-                    // Пользователя нету в этой беседе, добавляем его
+                    // Пользователя нету в базе, добавляем его
                     if (state === 'respect') {
                         room.updateOne({room: roomID}, {
                             $push: {
@@ -210,7 +212,7 @@ async function start() {
                         })
                     }
                 } else {
-                    // Пользователь есть уже в этой комнате
+                    // Пользователь есть в базе
                     const findState = await room.findOne({room: roomID, 'list.user': neededUser.screen_name});
                     let report = findState.list.filter((profile) => profile.user === neededUser.screen_name)[0].report;
                     let respect = findState.list.filter((profile) => profile.user === neededUser.screen_name)[0].respect;
@@ -272,20 +274,14 @@ async function start() {
             }
         }
         //==========================================================================================
-        // Выдать список команды
-        bot.command(/^!(top|топ)\sfags$/, (ctx) => {
-            ctx.reply('Потом на них посмотришь, создателю пока в падлу делать')
-        })
-        //==========================================================================================
-        // Выдать список команды
+        // Выдать список команд
         bot.command(/^!(help|хелп)$/, (ctx) => {
             ctx.reply('---- &#9997; Мои команды ----\n\n&#128237; [по пересланному сообщению]\n!res - кинуть респект своему хоуми\n' +
                 '!rep - зарепортить\n!rep или !res <можно указать причину>\n\n&#127942; [топы]\n' +
-                '!top res - топ челов по респектам\n!top rep - топ челов по репортам\n!top fags - топ faggots\n\n' +
+                '!top res - топ челов по респектам\n!top rep - топ челов по репортам\n\n' +
                 '&#128511; [по id]\n!rep или !res @id <можно указать причину>\n!st @id - узнать статус чела\n\n' +
                 '&#128225; [по любому упоминанию]\nанек - рандомный анек\nгачи - рандомный гачист\n\n' +
-                '&#128526; [для администраторв]\n!btn - добавляет меню\n!btn del - удаляет меню\n\n' +
-                '&#128197; [автоматически]\nвыбирает раз в 6 часов faggot беседы')
+                '&#128526; [для администраторв]\n!btn - добавляет меню\n!btn del - удаляет меню');
         })
         //==========================================================================================
         // Убрать у бота кнопки
@@ -311,59 +307,6 @@ async function start() {
             }
             checkAdmin(ctx, addButtons.bind(null, ctx))
         });
-        //==========================================================================================
-        // Поиск faggot беседы
-        async function searchFag(dateFormat, kind) {
-            async function sendMessage() {
-                try {
-                    const arRooms = await room.find({})
-                    if (arRooms.length > 1) {
-                        arRooms.forEach((el) => {
-                            bot.execute('messages.getConversationMembers', {
-                                peer_id: el.room,
-                            }).then(conversation => {
-                                if (conversation.profiles.length < 2) return; // Если в беседе один человек
-                                const randomPerson = conversation.profiles[getRandomInt(0, conversation.profiles.length)];
-                                bot.sendMessage(el.room, '&#128270; Поиск пидораса активирован')
-                                    .then(() => {
-                                        setTimeout(() => {
-                                            bot.sendMessage(el.room, '🎰 Бип-буп-бип...')
-                                                .catch((err) => {
-                                                    console.error(err)
-                                                })
-                                        }, 1500)
-                                        setTimeout(() => {
-                                            bot.sendMessage(el.room, `📸 Faggot ${kind} найден — @${randomPerson.screen_name}(${randomPerson.last_name})`)
-                                                .catch((err) => {
-                                                    console.error(err)
-                                                })
-                                        }, 4000)
-                                    })
-                                    .catch((err) => {
-                                        console.error(err)
-                                    })
-                            }).catch(err => console.error(err))
-                        });
-                    }
-                } catch (err) {
-                    console.error(err)
-                }
-            }
-            switch (dateFormat) {
-                case 'hour':
-                    schedule.scheduleJob('0 */6 * * *', async () => {
-                        sendMessage();
-                    });
-                    break;
-                case 'test':
-                    schedule.scheduleJob({hour: 22, minute: 30}, async () => {
-                        sendMessage();
-                    });
-                    break;
-            }
-        }
-        searchFag('hour', '');
-        //searchFag('test', '');
         //==========================================================================================
         // Рандомный gachimuchi
         bot.command(/(гачи|gachi)/i, async (ctx) => {
@@ -401,15 +344,13 @@ async function start() {
                 }
             }
             getAnecdote(ctx).then(data => {
-                let str = data.replace(/\{"content":"/, '');
-                str = str.split('"}')[0]
-                ctx.reply(str)
+                let anecdote = data.replace(/\{"content":"/, '');
+                anecdote = anecdote.split('"}')[0]
+                ctx.reply(anecdote)
             })
         })
         //==========================================================================================
         bot.command(/!(report|respect|res|rep)\s\[[\w]+\W@[\w-]+\]\s[a-zа-я0-9\W]+/i, async (ctx) => {
-            antiSpam(ctx, 5);
-            if (!ctx.session.access) return;
             // Пользователя которого ввели
             const dropUser = ctx.message.text.match(/@[\w-]+/ig)[0].slice(1);
             // Причина репорта/респекта
@@ -417,8 +358,6 @@ async function start() {
             sayStateForUser(ctx, reason, dropUser);
         });
         bot.command(/!(report|respect|res|rep)\s\[[\w]+\W@[\w-]+\]/i, async (ctx) => {
-            antiSpam(ctx, 5);
-            if (!ctx.session.access) return;
             // Пользователя которого ввели
             const dropUser = ctx.message.text.match(/@[\w-]+/ig)[0].slice(1);
             sayStateForUser(ctx, null, dropUser);
@@ -428,7 +367,6 @@ async function start() {
             // Причина репорта/респекта
             let reason = ctx.message.text.split(' ').filter((_, i) => i !== 0).join(' ');
             sayStateForUser(ctx, reason, null, dropUserID);
-
         });
         bot.command(/!(report|respect|res|rep)/i, async (ctx) => {
             let dropUserID = ctx.message.fwd_messages[0];
@@ -503,5 +441,4 @@ async function start() {
         console.error(err);
     }
 }
-
 start();
