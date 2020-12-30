@@ -1,4 +1,5 @@
 const VK = require('node-vk-bot-api');
+const api = require('node-vk-bot-api/lib/api');
 const Markup = require('node-vk-bot-api/lib/markup');
 const Session = require('node-vk-bot-api/lib/session');
 const session = new Session();
@@ -299,6 +300,7 @@ async function start() {
                 ctx.reply('Кнопки активированы &#127918;', null, Markup
                     .keyboard([
                         [
+                            Markup.button('Видос &#127916;', 'default'),
                             Markup.button('Анекдот &#128518;', 'default'),
                             Markup.button('Gachi &#127814;', 'default'),
                         ]
@@ -307,6 +309,44 @@ async function start() {
             }
             checkAdmin(ctx, addButtons.bind(null, ctx))
         });
+        //==========================================================================================
+        // Рандомное видео
+        bot.command(/(^!(video|видос)$|\[[\w]+\W@[\w-]+\]\sвидос|видос\s🎬)/i, async (ctx) => {
+            const arVideoGroups = [-30316056, -167127847]
+            try {
+                const randomGroupVideo = arVideoGroups[getRandomInt(0, arVideoGroups.length)];
+                const posts = await api('wall.get', {
+                    owner_id: randomGroupVideo,
+                    count: 98,
+                    access_token: config.get('access_token')
+                });
+                const videoPosts = posts.response.items.filter(el => el.attachments[0].type === 'video');
+                const randomVideo = videoPosts[getRandomInt(0, videoPosts.length)];
+                const video = randomVideo.attachments[0].video;
+                bot.sendMessage(ctx.message.peer_id, '', `video${video.owner_id}_${video.id}`);
+            } catch(err) {
+                ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
+                console.error(err);
+            }
+        });
+        // Последнее видео
+        bot.command(/^!(video|видос)\s(last|ласт)$/, async (ctx) => {
+            const arVideoGroups = [-30316056, -167127847]
+            try {
+                const randomGroupVideo = arVideoGroups[getRandomInt(0, arVideoGroups.length)];
+                const posts = await api('wall.get', {
+                    owner_id: randomGroupVideo,
+                    count: 20,
+                    access_token: config.get('access_token')
+                });
+                const videoPosts = posts.response.items.filter(el => el.attachments[0].type === 'video');
+                const video = videoPosts[0].attachments[0].video;
+                bot.sendMessage(ctx.message.peer_id, '', `video${video.owner_id}_${video.id}`);
+            } catch (e) {
+                ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
+                console.error(err);
+            }
+        })
         //==========================================================================================
         // Рандомный gachimuchi
         bot.command(/(гачи|gachi)/i, async (ctx) => {
@@ -319,7 +359,7 @@ async function start() {
                     peer_id: conversationID,
                 });
                 const randomPerson = conversation.profiles[getRandomInt(0, conversation.profiles.length)];
-                const randomGachi = arGachi[getRandomInt(0, arGachi.length)];
+                const randomGachi = arGachi[getRandomInt(0, arGachi.length - 1)];
                 ctx.reply(`@${randomPerson.screen_name}(${randomPerson.last_name}) ${randomGachi}`);
             } catch (e) {
                 ctx.reply('&#9762; Для работы бота нужна админка!');
