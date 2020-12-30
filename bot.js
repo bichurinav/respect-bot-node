@@ -313,12 +313,17 @@ async function start() {
         //==========================================================================================
         // Рандомное видео
         bot.command(/(^!(video|видос)$|\[[\w]+\W@[\w-]+\]\sвидос|видос\s🎬)/i, async (ctx) => {
-            const arVideoGroups = [-30316056, -167127847]
+            const arVideoGroups = [-30316056, -167127847];
+            const arOffset = [0, 100, 200, 300, 400, 500, 600, 700,
+                800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600,
+                1700, 1800, 1900, 2000, 2100, 2200, 2300, 2400, 2500];
             try {
                 const randomGroupVideo = arVideoGroups[getRandomInt(0, arVideoGroups.length)];
+                const offset = getRandomInt(0, arOffset);
                 const posts = await api('wall.get', {
                     owner_id: randomGroupVideo,
                     count: 98,
+                    offset,
                     access_token: config.get('access_token')
                 });
                 const videoPosts = posts.response.items.filter(el => el.attachments[0].type === 'video');
