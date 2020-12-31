@@ -274,6 +274,28 @@ async function start() {
                 ctx.reply('&#9762; Для работы бота нужна админка!');
             }
         }
+        // Получть посты группы или кол-во записей
+        async function getPosts(ownerID, count, offset, getLength) {
+            const {response} = await api('wall.get',{
+                owner_id: ownerID, count, offset, access_token: config.get('access_token')
+            })
+            if (getLength) return response.count
+            return response.items;
+        }
+        // Получть посты с видео
+        async function getVideoPosts(groupID, countPosts, offsetPosts) {
+            const posts = await getPosts(groupID, countPosts, offsetPosts)
+            const filterPosts = posts.filter(el => {
+                if (Array.isArray(el.attachments)) {
+                    const type = el.attachments[0].type;
+                    return type === 'video';
+                }
+            });
+            if (filterPosts.length < 1) {
+                getVideoPosts()
+            }
+            return filterPosts;
+        }
         //==========================================================================================
         // Выдать список команд
         bot.command(/^!(help|хелп)$/, (ctx) => {
@@ -312,22 +334,21 @@ async function start() {
         });
         //==========================================================================================
         // Рандомное видео
+        const arVideoGroups = [-30316056, -167127847]; // Список групп (id)
         bot.command(/(^!(video|видос)$|\[[\w]+\W@[\w-]+\]\sвидос|видос\s🎬)/i, async (ctx) => {
-            const arVideoGroups = [-30316056, -167127847];
-            const arOffset = [0, 100, 200, 300, 400, 500, 600, 700,
-                800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600,
-                1700, 1800, 1900, 2000, 2100, 2200, 2300, 2400, 2500];
+            ctx.session.group = '';
             try {
-                const randomGroupVideo = arVideoGroups[getRandomInt(0, arVideoGroups.length)];
-                const offset = getRandomInt(0, arOffset.length);
-                const posts = await api('wall.get', {
-                    owner_id: randomGroupVideo,
-                    count: 98,
-                    offset,
-                    access_token: config.get('access_token')
-                });
-                const videoPosts = posts.response.items.filter(el => el.attachments[0].type === 'video');
+                // Получаем случайную группу
+                ctx.session.group = arVideoGroups[getRandomInt(0, arVideoGroups.length)];
+                // Кол-во записией в группе
+                const count = await getPosts(ctx.session.group, 0, 0, true);
+                // Получаем случаный сдвиг (с какой записи будем получать видео)
+                const offset = getRandomInt(0, Math.floor(count - 98));
+                // Получаем посты с видео
+                const videoPosts = await getVideoPosts(ctx.session.group, count, offset);
+                // Получаем случайное видео
                 const randomVideo = videoPosts[getRandomInt(0, videoPosts.length)];
+                // Выводим видео
                 const video = randomVideo.attachments[0].video;
                 bot.sendMessage(ctx.message.peer_id, '', `video${video.owner_id}_${video.id}`);
             } catch(err) {
@@ -337,15 +358,9 @@ async function start() {
         });
         // Последнее видео
         bot.command(/^!(video|видос)\s(last|ласт)$/, async (ctx) => {
-            const arVideoGroups = [-30316056, -167127847]
             try {
                 const randomGroupVideo = arVideoGroups[getRandomInt(0, arVideoGroups.length)];
-                const posts = await api('wall.get', {
-                    owner_id: randomGroupVideo,
-                    count: 20,
-                    access_token: config.get('access_token')
-                });
-                const videoPosts = posts.response.items.filter(el => el.attachments[0].type === 'video');
+                const videoPosts = await getVideoPosts(randomGroupVideo, 20, 0);
                 const video = videoPosts[0].attachments[0].video;
                 bot.sendMessage(ctx.message.peer_id, '', `video${video.owner_id}_${video.id}`);
             } catch (e) {
