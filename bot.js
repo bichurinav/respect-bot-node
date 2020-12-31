@@ -283,12 +283,12 @@ async function start() {
             return response.items;
         }
         // Получть посты с видео
-        async function getVideoPosts(groupID, countPosts, offsetPosts) {
+        async function getFilterPosts(groupID, countPosts, offsetPosts, postType = 'video') {
             const posts = await getPosts(groupID, countPosts, offsetPosts)
             const filterPosts = posts.filter(el => {
                 if (Array.isArray(el.attachments)) {
                     const type = el.attachments[0].type;
-                    return type === 'video';
+                    return type === postType;
                 }
             });
             if (filterPosts.length < 1) {
@@ -345,7 +345,7 @@ async function start() {
                 // Получаем случаный сдвиг (с какой записи будем получать видео)
                 const offset = getRandomInt(0, Math.floor(count - 98));
                 // Получаем посты с видео
-                const videoPosts = await getVideoPosts(ctx.session.group, count, offset);
+                const videoPosts = await getFilterPosts(ctx.session.group, count, offset);
                 // Получаем случайное видео
                 const randomVideo = videoPosts[getRandomInt(0, videoPosts.length)];
                 // Выводим видео
@@ -360,10 +360,34 @@ async function start() {
         bot.command(/^!(video|видос)\s(last|ласт)$/, async (ctx) => {
             try {
                 const randomGroupVideo = arVideoGroups[getRandomInt(0, arVideoGroups.length)];
-                const videoPosts = await getVideoPosts(randomGroupVideo, 20, 0);
+                const videoPosts = await getFilterPosts(randomGroupVideo, 20, 0);
                 const video = videoPosts[0].attachments[0].video;
                 bot.sendMessage(ctx.message.peer_id, '', `video${video.owner_id}_${video.id}`);
             } catch (e) {
+                ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
+                console.error(err);
+            }
+        })
+        //==========================================================================================
+        const arMemGroups = [-45745333, -155464693];
+        // Случайный мем
+        bot.command(/^!(mem|мем|memes|мемес)$/, async (ctx) => {
+            ctx.session.group = ''
+            try {
+                // Получаем случайную группу
+                ctx.session.group = arMemGroups[getRandomInt(0, arMemGroups.length)];
+                // Кол-во записией в группе
+                const count = await getPosts(ctx.session.group, 0, 0, true);
+                // Получаем случаный сдвиг (с какой записи будем получать мем)
+                const offset = getRandomInt(0, Math.floor(count - 98));
+                // Получаем посты с фото
+                const photoPosts = await getFilterPosts(ctx.session.group, count, offset, 'photo');
+                // Получаем случайный мем
+                const randomPhoto = photoPosts[getRandomInt(0, photoPosts.length)];
+                // Выводим мем
+                const mem = randomPhoto.attachments[0].photo;
+                bot.sendMessage(ctx.message.peer_id, `[public${Math.abs(ctx.session.group)}|источник]`, `photo${mem.owner_id}_${mem.id}`);
+            } catch(err) {
                 ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
                 console.error(err);
             }
