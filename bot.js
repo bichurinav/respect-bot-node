@@ -73,7 +73,7 @@ async function start() {
             return Math.floor(Math.random() * (max - min)) + min;
         }
         // Против спама
-        function antiSpam(ctx, delay = 30) {
+        function antiSpam(ctx, delay = 10) {
             ctx.session.userTime = ctx.session.userTime || getTime(ctx.message.date);
             ctx.session.warn = ctx.session.warn || 'warn';
             function check(res) {
@@ -274,7 +274,7 @@ async function start() {
                 ctx.reply('&#9762; Для работы бота нужна админка!');
             }
         }
-        // Получть посты группы или кол-во записей
+        // Получить посты группы или кол-во записей
         async function getPosts(ownerID, count, offset, getLength) {
             const {response} = await api('wall.get',{
                 owner_id: ownerID, count, offset, access_token: config.get('access_token')
@@ -282,7 +282,7 @@ async function start() {
             if (getLength) return response.count
             return response.items;
         }
-        // Получть посты по фильтру (video, photo, text)
+        // Получить посты по фильтру (video, photo, text)
         async function getFilterPosts(groupID, countPosts, offsetPosts, postType = 'photo') {
             const posts = await getPosts(groupID, countPosts, offsetPosts)
             const filterPosts = posts.filter(el => {
@@ -298,6 +298,49 @@ async function start() {
             }
             return filterPosts;
         }
+        // Получить случайный, нужный пост
+        async function giveRandomPost(ctx, groups, type) {
+            antiSpam(ctx, 4);
+            if (!ctx.session.access) return;
+            ctx.session.group = '';
+            try {
+                // Выводит пост
+                function sendPost(conversationID) {
+                    if (type === 'video') {
+                        bot.sendMessage(conversationID, '', `${type}${post.owner_id}_${post.id}`);
+                    } else if (type === 'text') {
+                        bot.sendMessage(conversationID, `${post.text}\n\n${source}`);
+                    } else {
+                        bot.sendMessage(conversationID, `${source}`, `${type}${post.owner_id}_${post.id}`);
+                    }
+                }
+                // Получаем случайную группу
+                ctx.session.group = groups[getRandomInt(0, groups.length)];
+                // Источник
+                const source = `[public${Math.abs(ctx.session.group)}|источник]`;
+                // Кол-во записией в группе
+                const count = await getPosts(ctx.session.group, 0, 0, true);
+                // Получаем случаный сдвиг (с какой записи будем получать видео)
+                const offset = getRandomInt(0, Math.floor(count - 98));
+                // Получаем нужные посты
+                const posts = await getFilterPosts(ctx.session.group, count, offset, type);
+                // Получаем случайный пост
+                const randomPost = posts[getRandomInt(0, posts.length)];
+                // Пост
+                let post = {};
+                if (type !== 'text') {
+                    post = randomPost.attachments[0][type];
+                } else {
+                    post = randomPost;
+                }
+                if (!post) return bot.sendMessage(ctx.message.peer_id, `&#9762; Блин блинский, давай еще раз(`);
+                // Выводим пост
+                sendPost(ctx.message.peer_id);
+            } catch (err) {
+                ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
+                console.error(err);
+            }
+        }
         //==========================================================================================
         // Выдать список команд
         bot.command(/^!(help|хелп)$/, (ctx) => {
@@ -305,9 +348,9 @@ async function start() {
                 '!rep - зарепортить\n!rep или !res <можно указать причину>\n\n&#127942; [топы]\n' +
                 '!top res - топ челов по респектам\n!top rep - топ челов по репортам\n\n' +
                 '&#128511; [по id]\n!rep или !res @id <можно указать причину>\n!st @id - узнать статус чела\n\n' +
-                '&#127916; [видосики]\n!видос - рандомный видосик\n!видос ласт - последний видос\n\n' +
-                '🐸 [мемы]\n!мем - рандомный мем\n\n' +
-                '&#128225; [по любому упоминанию]\nанек - рандомный анекдот\nгачи - рандомный гачист\n\n' +
+                '&#127916; [видосики]\n!видос - случайный видос\n!видос ласт - последний видос\n\n' +
+                '🐸 [мемы]\n!мем - случайный мем\n\n' +
+                '&#128225; [по любому упоминанию]\nанек - случайный анекдот\nгачи - случайный гачист\n\n' +
                 '&#128526; [для администраторв]\n!btn - добавляет меню\n!btn del - удаляет меню');
         })
         //==========================================================================================
@@ -336,66 +379,28 @@ async function start() {
             checkAdmin(ctx, addButtons.bind(null, ctx))
         });
         //==========================================================================================
-        // Рандомное видео
+        // Рандомное видео из группы VK
+        const arVideoGroups = [-30316056, -167127847]; // Список групп (id)
         bot.command(/(^!(video|видос)$|\[[\w]+\W@[\w-]+\]\sвидос|видос\s🎬)/i, async (ctx) => {
-            const arVideoGroups = [-30316056, -167127847]; // Список групп (id)
-            ctx.session.group = '';
-            try {
-                // Получаем случайную группу
-                ctx.session.group = arVideoGroups[getRandomInt(0, arVideoGroups.length)];
-                // Кол-во записией в группе
-                const count = await getPosts(ctx.session.group, 0, 0, true);
-                // Получаем случаный сдвиг (с какой записи будем получать видео)
-                const offset = getRandomInt(0, Math.floor(count - 98));
-                // Получаем посты с видео
-                const videoPosts = await getFilterPosts(ctx.session.group, count, offset, 'video');
-                // Получаем случайное видео
-                const randomVideo = videoPosts[getRandomInt(0, videoPosts.length)];
-                // Выводим видео
-                const video = randomVideo.attachments[0].video;
-                if (!video) return bot.sendMessage(ctx.message.peer_id, `&#9762; Блин блинский, давай еще раз(`);
-                bot.sendMessage(ctx.message.peer_id, '', `video${video.owner_id}_${video.id}`);
-            } catch(err) {
-                ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
-                console.error(err);
-            }
+            giveRandomPost(ctx, arVideoGroups, 'video');
         });
-        // Последнее видео
+        // Последнее видео из группы VK
         bot.command(/^!(video|видос)\s(last|ласт)$/, async (ctx) => {
             try {
                 const randomGroupVideo = arVideoGroups[getRandomInt(0, arVideoGroups.length)];
-                const videoPosts = await getFilterPosts(randomGroupVideo, 20, 0);
+                const videoPosts = await getFilterPosts(randomGroupVideo, 20, 0, 'video');
                 const video = videoPosts[0].attachments[0].video;
                 bot.sendMessage(ctx.message.peer_id, '', `video${video.owner_id}_${video.id}`);
-            } catch (e) {
+            } catch (err) {
                 ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
                 console.error(err);
             }
         })
         //==========================================================================================
-        // Случайный мем
+        // Случайный мем из группы VK
         bot.command(/^!(mem|мем|memes|мемес)$/, async (ctx) => {
-            const arMemGroups = [-45745333, -155464693];
-            ctx.session.group = ''
-            try {
-                // Получаем случайную группу
-                ctx.session.group = arMemGroups[getRandomInt(0, arMemGroups.length)];
-                // Кол-во записией в группе
-                const count = await getPosts(ctx.session.group, 0, 0, true);
-                // Получаем случаный сдвиг (с какой записи будем получать мем)
-                const offset = getRandomInt(0, Math.floor(count - 98));
-                // Получаем посты с фото
-                const photoPosts = await getFilterPosts(ctx.session.group, count, offset, 'photo');
-                // Получаем случайный мем
-                const randomPhoto = photoPosts[getRandomInt(0, photoPosts.length)];
-                // Выводим мем
-                const mem = randomPhoto.attachments[0].photo;
-                if (!mem) return bot.sendMessage(ctx.message.peer_id, `&#9762; Блин блинский, давай еще раз(`);
-                bot.sendMessage(ctx.message.peer_id, `[public${Math.abs(ctx.session.group)}|источник]`, `photo${mem.owner_id}_${mem.id}`);
-            } catch(err) {
-                ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
-                console.error(err);
-            }
+            const arMemGroups = [-45745333, -155464693]; // Список групп (id)
+            giveRandomPost(ctx, arMemGroups, 'photo');
         })
         //==========================================================================================
         // Случайный анекдот для дедов
@@ -425,27 +430,8 @@ async function start() {
         //==========================================================================================
         // Случайный анекдот из группы VK
         bot.command(/(анек|анекдот|анекдоты)/i, async (ctx) => {
-            antiSpam(ctx, 5);
-            if (!ctx.session.access) return;
-            const arAnecGroups = [-149279263];
-            ctx.session.group = ''
-            try {
-                // Получаем случайную группу
-                ctx.session.group = arAnecGroups[getRandomInt(0, arAnecGroups.length)];
-                // Кол-во записией в группе
-                const count = await getPosts(ctx.session.group, 0, 0, true);
-                // Получаем случаный сдвиг (с какой записи будем получать анекдот)
-                const offset = getRandomInt(0, Math.floor(count - 98));
-                // Получаем посты с анекдотами
-                const textPosts = await await getFilterPosts(ctx.session.group, count, offset, 'text');
-                // Получаем случайный анекдот
-                const anecdote = textPosts[getRandomInt(0, textPosts.length)];
-                if (!anecdote) return bot.sendMessage(ctx.message.peer_id, `&#9762; Блин блинский, давай еще раз(`);
-                bot.sendMessage(ctx.message.peer_id, `${anecdote.text}\n\n[public${Math.abs(ctx.session.group)}|источник]`);
-            } catch(err) {
-                ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
-                console.error(err);
-            }
+            const arAnecGroups = [-149279263]; // Список групп (id)
+            giveRandomPost(ctx, arAnecGroups, 'text');
         })
         //==========================================================================================
         // Случайный gachimuchi
@@ -534,15 +520,12 @@ async function start() {
                     if (a[state] < a[state]) return 1;
                 }
                 const roomTop = room.list.sort(compare);
-
                 const topList = roomTop.map((el, index) => {
                     if (index < 10) {
                         return `${index + 1}. ${el.firstName} ${el.lastName} - ${el[state]}\n`
                     }
                 })
-
                 ctx.reply(`Топ челов по ${state === 'respect' ? 'респектам &#129305;' : 'репортам &#128078;'}\n${topList.join('')}`);
-
             } catch (err) {
                 ctx.reply('&#128203; Список пуст,' +
                     ' кидайте респекты/репорты участникам беседы')
