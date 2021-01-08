@@ -282,17 +282,19 @@ async function start() {
             if (getLength) return response.count
             return response.items;
         }
-        // Получть посты с видео
-        async function getFilterPosts(groupID, countPosts, offsetPosts, postType = 'video') {
+        // Получть посты по фильтру (video, photo, text)
+        async function getFilterPosts(groupID, countPosts, offsetPosts, postType = 'photo') {
             const posts = await getPosts(groupID, countPosts, offsetPosts)
             const filterPosts = posts.filter(el => {
                 if (Array.isArray(el.attachments)) {
                     const type = el.attachments[0].type;
                     return type === postType;
+                } else {
+                    return postType === 'text';
                 }
             });
             if (filterPosts.length < 1) {
-                getVideoPosts()
+                return getFilterPosts(groupID, countPosts, offsetPosts, postType)
             }
             return filterPosts;
         }
@@ -304,7 +306,8 @@ async function start() {
                 '!top res - топ челов по респектам\n!top rep - топ челов по репортам\n\n' +
                 '&#128511; [по id]\n!rep или !res @id <можно указать причину>\n!st @id - узнать статус чела\n\n' +
                 '&#127916; [видосики]\n!видос - рандомный видосик\n!видос ласт - последний видос\n\n' +
-                '&#128225; [по любому упоминанию]\nанек - рандомный анек\nгачи - рандомный гачист\n\n' +
+                '🐸 [мемы]\n!мем - рандомный мем\n\n' +
+                '&#128225; [по любому упоминанию]\nанек - рандомный анекдот\nгачи - рандомный гачист\n\n' +
                 '&#128526; [для администраторв]\n!btn - добавляет меню\n!btn del - удаляет меню');
         })
         //==========================================================================================
@@ -334,8 +337,8 @@ async function start() {
         });
         //==========================================================================================
         // Рандомное видео
-        const arVideoGroups = [-30316056, -167127847]; // Список групп (id)
         bot.command(/(^!(video|видос)$|\[[\w]+\W@[\w-]+\]\sвидос|видос\s🎬)/i, async (ctx) => {
+            const arVideoGroups = [-30316056, -167127847]; // Список групп (id)
             ctx.session.group = '';
             try {
                 // Получаем случайную группу
@@ -345,11 +348,12 @@ async function start() {
                 // Получаем случаный сдвиг (с какой записи будем получать видео)
                 const offset = getRandomInt(0, Math.floor(count - 98));
                 // Получаем посты с видео
-                const videoPosts = await getFilterPosts(ctx.session.group, count, offset);
+                const videoPosts = await getFilterPosts(ctx.session.group, count, offset, 'video');
                 // Получаем случайное видео
                 const randomVideo = videoPosts[getRandomInt(0, videoPosts.length)];
                 // Выводим видео
                 const video = randomVideo.attachments[0].video;
+                if (!video) return bot.sendMessage(ctx.message.peer_id, `&#9762; Блин блинский, давай еще раз(`);
                 bot.sendMessage(ctx.message.peer_id, '', `video${video.owner_id}_${video.id}`);
             } catch(err) {
                 ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
@@ -369,9 +373,9 @@ async function start() {
             }
         })
         //==========================================================================================
-        const arMemGroups = [-45745333, -155464693];
         // Случайный мем
         bot.command(/^!(mem|мем|memes|мемес)$/, async (ctx) => {
+            const arMemGroups = [-45745333, -155464693];
             ctx.session.group = ''
             try {
                 // Получаем случайную группу
@@ -386,6 +390,7 @@ async function start() {
                 const randomPhoto = photoPosts[getRandomInt(0, photoPosts.length)];
                 // Выводим мем
                 const mem = randomPhoto.attachments[0].photo;
+                if (!mem) return bot.sendMessage(ctx.message.peer_id, `&#9762; Блин блинский, давай еще раз(`);
                 bot.sendMessage(ctx.message.peer_id, `[public${Math.abs(ctx.session.group)}|источник]`, `photo${mem.owner_id}_${mem.id}`);
             } catch(err) {
                 ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
@@ -393,7 +398,57 @@ async function start() {
             }
         })
         //==========================================================================================
-        // Рандомный gachimuchi
+        // Случайный анекдот для дедов
+        bot.command(/^!(anec old|анек олд|анекдот олд)$/i, (ctx) => {
+            antiSpam(ctx, 5);
+            if (!ctx.session.access) return;
+            async function getAnecdote() {
+                try {
+                    return axios.get(
+                        'http://rzhunemogu.ru/RandJSON.aspx?CType=11',
+                        {
+                            responseType: 'arraybuffer',
+                            responseEncoding: 'binary'
+                        })
+                        .then(response => iconv.decode(Buffer.from(response.data), 'windows-1251'))
+                } catch (err) {
+                    ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
+                    console.error(err)
+                }
+            }
+            getAnecdote(ctx).then(data => {
+                let anecdote = data.replace(/\{"content":"/, '');
+                anecdote = anecdote.split('"}')[0]
+                ctx.reply(anecdote)
+            })
+        })
+        //==========================================================================================
+        // Случайный анекдот из группы VK
+        bot.command(/(анек|анекдот|анекдоты)/i, async (ctx) => {
+            antiSpam(ctx, 5);
+            if (!ctx.session.access) return;
+            const arAnecGroups = [-149279263];
+            ctx.session.group = ''
+            try {
+                // Получаем случайную группу
+                ctx.session.group = arAnecGroups[getRandomInt(0, arAnecGroups.length)];
+                // Кол-во записией в группе
+                const count = await getPosts(ctx.session.group, 0, 0, true);
+                // Получаем случаный сдвиг (с какой записи будем получать анекдот)
+                const offset = getRandomInt(0, Math.floor(count - 98));
+                // Получаем посты с анекдотами
+                const textPosts = await await getFilterPosts(ctx.session.group, count, offset, 'text');
+                // Получаем случайный анекдот
+                const anecdote = textPosts[getRandomInt(0, textPosts.length)];
+                if (!anecdote) return bot.sendMessage(ctx.message.peer_id, `&#9762; Блин блинский, давай еще раз(`);
+                bot.sendMessage(ctx.message.peer_id, `${anecdote.text}\n\n[public${Math.abs(ctx.session.group)}|источник]`);
+            } catch(err) {
+                ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
+                console.error(err);
+            }
+        })
+        //==========================================================================================
+        // Случайный gachimuchi
         bot.command(/(гачи|gachi)/i, async (ctx) => {
             antiSpam(ctx, 5);
             if (!ctx.session.access) return;
@@ -410,30 +465,6 @@ async function start() {
                 ctx.reply('&#9762; Для работы бота нужна админка!');
             }
         });
-        //==========================================================================================
-        // Рандомный анекдот
-        bot.command(/(анек|анекдот|анекдоты)/i, (ctx) => {
-            antiSpam(ctx, 5);
-            if (!ctx.session.access) return;
-            async function getAnecdote() {
-                try {
-                    return axios.get(
-                        'http://rzhunemogu.ru/RandJSON.aspx?CType=11',
-                        {
-                            responseType: 'arraybuffer',
-                            responseEncoding: 'binary'
-                        })
-                        .then(response => iconv.decode(Buffer.from(response.data), 'windows-1251'))
-                } catch (err) {
-                    console.error(err)
-                }
-            }
-            getAnecdote(ctx).then(data => {
-                let anecdote = data.replace(/\{"content":"/, '');
-                anecdote = anecdote.split('"}')[0]
-                ctx.reply(anecdote)
-            })
-        })
         //==========================================================================================
         bot.command(/!(report|respect|res|rep)\s\[[\w]+\W@[\w-]+\]\s[a-zа-я0-9\W]+/i, async (ctx) => {
             // Пользователя которого ввели
