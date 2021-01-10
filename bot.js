@@ -8,11 +8,18 @@ const room = require('./schema/room');
 const iconv = require('iconv-lite');
 const axios = require('axios');
 const config = require('config');
+const fs = require('fs');
 
 const token = config.get('token');
 const dbURL = config.get('database');
 const bot = new VK(token);
 bot.use(session.middleware());
+
+const cards21 = [
+    {card: '6', score: 6}, {card: '7', score: 7}, {card: '8', score: 8},
+    {card: '9', score: 9}, {card: '10', score: 10}, {card: 'J', score: 2},
+    {card: 'Q', score: 3}, {card: 'K', score: 4}, {card: 'A', score: 11}
+]
 
 async function start() {
     try {
@@ -342,6 +349,60 @@ async function start() {
             }
         }
         //==========================================================================================
+        // ***********    BETA     *********
+        bot.command(/^!21$/, (ctx) => {
+            bot.sendMessage(ctx.message.peer_id, '🎯 Игра в 21 очко (beta version)', null, Markup
+                .keyboard([
+                    Markup.button({
+                        action: {
+                            type: 'text',
+                            payload: JSON.stringify({
+                                action: 'takeCards',
+                            }),
+                            label: "Взять карты"
+                        }
+                    }),
+                    Markup.button({
+                        action: {
+                            type: 'text',
+                            payload: JSON.stringify({
+                                action: 'takeCard',
+                            }),
+                            label: "Взять еще"
+                        }
+                    }),
+                    Markup.button({
+                        action: {
+                            type: 'text',
+                            payload: JSON.stringify({
+                                action: 'giveTop',
+                            }),
+                            label: "Топ челов"
+                        }
+                    }),
+                    Markup.button({
+                        action: {
+                            type: 'text',
+                            payload: JSON.stringify({
+                                action: 'giveRule',
+                            }),
+                            label: "Правила"
+                        }
+                    }),
+                    Markup.button({
+                        action: {
+                            type: 'text',
+                            payload: JSON.stringify({
+                                action: 'showCards',
+                            }),
+                            label: "Показать карты"
+                        }
+                    }),
+                ], { columns: 2 })
+                .inline()
+            )
+        })
+        //==========================================================================================
         // Выдать список команд
         bot.command(/^!(help|хелп)$/, (ctx) => {
             ctx.reply('---- &#9997; Мои команды ----\n\n&#128237; [по пересланному сообщению]\n!res - кинуть респект своему хоуми\n' +
@@ -534,6 +595,320 @@ async function start() {
         bot.command(/^!(top|топ)$/i, async (ctx) => {
             ctx.reply('&#9762; !top res или rep');
         });
+        //==========================================================================================
+        bot.event('message_new', async (ctx) => {
+            if (ctx.message.payload) {
+                function compare(a, b) {
+                    if (a.score > b.score) return -1;
+                    if (a.score === b.score) return 0;
+                    if (a.score < b.score) return 1;
+                }
+                const payload = JSON.parse(ctx.message.payload)
+                if (payload.action === 'takeCards') {
+                    try {
+                        const rooms = JSON.parse(fs.readFileSync('./cards21.json', 'utf-8'));
+                        const neededRoom = rooms.filter(el => el.room === ctx.message.peer_id);
+                        const cardOne = cards21[getRandomInt(0, cards21.length)];
+                        const cardTwo = cards21[getRandomInt(0, cards21.length)];
+
+                        if (neededRoom.length < 1) {
+                            rooms.push({
+                                room: ctx.message.peer_id,
+                                start: false,
+                                online: 1,
+                                players: [{
+                                    user: ctx.message.from_id,
+                                    cards: [`[${cardOne.card}]`, `[${cardTwo.card}]`],
+                                    score: cardOne.score + cardTwo.score,
+                                }],
+                                top: []
+                            })
+                            await bot.sendMessage(ctx.message.from_id, `-------\n[${cardOne.card}] [${cardTwo.card}]`)
+                            fs.writeFileSync('./cards21.json', JSON.stringify(rooms, null, 2))
+                        } else {
+                            if (neededRoom[0].start) ctx.reply('🃏 Игроки играют, подождите...')
+                            const players = neededRoom[0].players;
+                            const existPlayer = players.filter(el => el.user === ctx.message.from_id)[0];
+                            if (existPlayer) {
+                                const user = await bot.execute('users.get', {
+                                    user_ids: ctx.message.from_id,
+                                    name_case: 'Nom'
+                                })
+                                return ctx.reply(`🃏 ${user[0].first_name}, ты уже взял карты!`,
+                                    null, Markup
+                                        .keyboard([
+                                            Markup.button({
+                                                action: {
+                                                    type: 'text',
+                                                    payload: JSON.stringify({
+                                                        action: 'showCards',
+                                                    }),
+                                                    label: "Показать карты"
+                                                }
+                                            })
+                                        ])
+                                        .inline()
+                                )
+                            }
+
+                            bot.sendMessage(ctx.message.from_id, `-------\n[${cardOne.card}] [${cardTwo.card}]`)
+
+                            if (cardOne.score + cardTwo.score === 22) {
+                                return ctx.reply('🃏 Выпало 22', null,
+                                    Markup
+                                        .keyboard([
+                                            Markup.button({
+                                                action: {
+                                                    type: 'text',
+                                                    payload: JSON.stringify({
+                                                        action: 'takeCards',
+                                                    }),
+                                                    label: "Взять карты"
+                                                }
+                                            })
+                                        ])
+                                        .inline()
+                                )
+                            }
+
+                            neededRoom[0].players.push({
+                                user: ctx.message.from_id,
+                                cards: [`[${cardOne.card}]`, `[${cardTwo.card}]`],
+                                score: cardOne.score + cardTwo.score
+                            })
+                            neededRoom[0].online += 1;
+                            const arDelRoom = rooms.filter(el => el.room !== ctx.message.peer_id);
+                            const newRooms = [neededRoom[0], ...arDelRoom];
+                            fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2))
+                        }
+                    } catch(err) {
+                        console.log(err)
+                        bot.sendMessage(ctx.message.peer_id, `🃏 Напиши боту в лс (что угодно), и тогда сможешь брать карты`,
+                            null,  Markup
+                                .keyboard([
+                                    Markup.button({
+                                        action: {
+                                            type: 'open_link',
+                                            link: 'https://vk.com/im?media=&sel=-201031864',
+                                            label: "Написать"
+                                        }
+                                    })
+                                ])
+                                .inline()
+                        )
+                    }
+                }
+                if (payload.action === 'takeCard') {
+                    try {
+                        const rooms = JSON.parse(fs.readFileSync('./cards21.json', 'utf-8'));
+                        const neededRoom = rooms.filter(el => el.room === ctx.message.peer_id);
+                        const user = await bot.execute('users.get', {
+                            user_ids: ctx.message.from_id,
+                            fields: 'sex',
+                            name_case: 'Nom'
+                        })
+                        const players = neededRoom[0].players;
+                        const existPlayer = players.filter(el => el.user === ctx.message.from_id)[0];
+
+                        if (!existPlayer) {
+                            return ctx.reply(`🃏 ${user[0].first_name}, ты не ${user[0].sex === 2 ? 'взял' : 'взяла'} карты!`,
+                                null, Markup
+                                    .keyboard([
+                                        Markup.button({
+                                            action: {
+                                                type: 'text',
+                                                payload: JSON.stringify({
+                                                    action: 'takeCards',
+                                                }),
+                                                label: "Взять карты"
+                                            }
+                                        })
+                                    ])
+                                    .inline()
+                            )
+                        }
+                        if (players.length < 2) {
+                            return ctx.reply(`🃏 Дождись хотя бы еще одного игрока, ему надо взять карты`)
+                        }
+                        if (existPlayer.score === 0) {
+                            return ctx.reply(`🃏 ${user[0].first_name}, ты лох, не можешь брать`)
+                        }
+
+                        const card = cards21[getRandomInt(0, cards21.length)];
+                        const scorePlayer = existPlayer.score + card.score;
+                        const cardsPlayer = [...existPlayer.cards, `[${card.card}]`];
+                        let updatePlayer = {
+                            user: ctx.message.from_id,
+                            cards: cardsPlayer,
+                            score: scorePlayer
+                        }
+                        const arDelPlayer = players.filter(el => el.user !== ctx.message.from_id);
+                        const arDelRoom = rooms.filter(el => el.room !== ctx.message.peer_id);
+
+                        await bot.sendMessage(ctx.message.from_id, `[${card.card}]`)
+
+                        let newRooms = null;
+                        neededRoom[0].start = true;
+
+                        if (scorePlayer > 21) {
+                            updatePlayer = {
+                                user: ctx.message.from_id,
+                                cards: cardsPlayer,
+                                score: 0
+                            }
+                            neededRoom[0].players = [updatePlayer, ...arDelPlayer];
+                            neededRoom[0].online -= 1;
+
+                            newRooms = [neededRoom[0], ...arDelRoom];
+                            await bot.sendMessage(ctx.message.peer_id, `🃏 ${user[0].first_name} — лох, перебор ${scorePlayer}`);
+                            fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2));
+                        } else {
+                            neededRoom[0].players = [updatePlayer, ...arDelPlayer];
+                            newRooms = [neededRoom[0], ...arDelRoom];
+                            fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2))
+                        }
+                    } catch (err) {
+                        console.error(err)
+                        ctx.reply('&#9762; Блин блинский, сбой какой-то, где-то создатель напортачил(')
+                    }
+                }
+                if (payload.action === 'giveTop') {
+                    const rooms = JSON.parse(fs.readFileSync('./cards21.json', 'utf-8'));
+                    const neededRoom = rooms.filter(el => el.room === ctx.message.peer_id);
+                    if (neededRoom.length < 1) {
+                        return ctx.reply(`📜 Список пуст...`)
+                    }
+                    const topPlayers = neededRoom[0].top.sort(compare);
+                    if (topPlayers.length < 1) {
+                        return ctx.reply(`📜 Список пуст...`)
+                    }
+                    const topPlayerList = topPlayers.map((el, idx) => {
+                        return `${idx + 1}. ${el.firstName} ${el.lastName} - ${el.score}`;
+                    })
+                    return ctx.reply(`📜 Топ челов в 21\n${topPlayerList.join('')}`);
+                }
+                if (payload.action === 'showCards') {
+                    try {
+                        const rooms = JSON.parse(fs.readFileSync('./cards21.json', 'utf-8'));
+                        const neededRoom = rooms.filter(el => el.room === ctx.message.peer_id);
+                        const players = neededRoom[0].players;
+                        const existPlayer = players.filter(el => el.user === ctx.message.from_id)[0];
+
+                        if (!existPlayer) {
+                            const user = await bot.execute('users.get', {
+                                user_ids: ctx.message.from_id,
+                                fields: 'sex',
+                                name_case: 'Nom'
+                            })
+                            return ctx.reply(`🃏 ${user[0].first_name}, ты не ${user[0].sex === 2 ? 'взял' : 'взяла'} карты!`,
+                                null, Markup
+                                    .keyboard([
+                                        Markup.button({
+                                            action: {
+                                                type: 'text',
+                                                payload: JSON.stringify({
+                                                    action: 'takeCards',
+                                                }),
+                                                label: "Взять карты"
+                                            }
+                                        })
+                                    ])
+                                    .inline()
+                            )
+                        }
+                        if (players.length < 2) {
+                            return ctx.reply(`🃏 Дождись хотя бы еще одного игрока, ему надо взять карты`)
+                        }
+                        if (existPlayer.show) {
+                            const user = await bot.execute('users.get', {
+                                user_ids: ctx.message.from_id,
+                                fields: 'sex',
+                                name_case: 'Nom'
+                            })
+                            return ctx.reply(`🃏 ${user[0].first_name}, ты уже показывал свои карты!`)
+                        }
+
+                        const cards = existPlayer.cards.join(' ');
+                        const arDelRoom = rooms.filter(el => el.room !== ctx.message.peer_id);
+                        neededRoom[0].players.forEach((el) => {
+                            if (el.user === ctx.message.from_id) {
+                                el.show = true
+                            }
+                        })
+
+                        if (existPlayer.score === 0) {
+                            const user = await bot.execute('users.get', {
+                                user_ids: ctx.message.from_id,
+                                fields: 'sex',
+                                name_case: 'Nom'
+                            })
+                            ctx.reply(`${user[0].first_name} ${user[0].sex === 2 ? 'проиграл' : 'проиграла'} с такими картами ${cards}`).then(() => {
+                                fs.writeFileSync('./cards21.json', JSON.stringify([neededRoom[0], ...arDelRoom], null, 2))
+                            })
+                        } else {
+                            neededRoom[0].start = true;
+                            neededRoom[0].online -= 1;
+                            const user = await bot.execute('users.get', {
+                                user_ids: ctx.message.from_id,
+                                fields: 'sex',
+                                name_case: 'Gen'
+                            })
+
+                            await bot.sendMessage(ctx.message.peer_id, `🃏 у ${user[0].first_name} ${cards}, ${user[0].sex === 2 ? 'набрал' : 'набрала'} — ${existPlayer.score}`)
+                            let newRooms = [neededRoom[0], ...arDelRoom];
+
+                            if (neededRoom[0].online < 1) {
+                                neededRoom[0].start = false;
+                                neededRoom[0].online = 0;
+                                const topPlayers = neededRoom[0].players.sort(compare)
+                                neededRoom[0].players = [];
+                                const user = await bot.execute('users.get', {
+                                    user_ids: topPlayers[0].user,
+                                    fields: 'sex',
+                                    name_case: 'Nom'
+                                })
+
+                                const existTopPlayer = neededRoom[0].top.filter(el => el.user === topPlayers[0].user)[0];
+                                if (!existTopPlayer) {
+                                    neededRoom[0].top.push({
+                                        user: topPlayers[0].user,
+                                        firstName: user[0].first_name,
+                                        lastName: user[0].last_name,
+                                        score: 1
+                                    });
+                                } else {
+                                    const arDelPlayer = neededRoom[0].top.filter(el => el.user !== topPlayers[0].user)
+                                    const updatePlayer = {
+                                        user: topPlayers[0].user,
+                                        firstName: user[0].first_name,
+                                        lastName: user[0].last_name,
+                                        score: existTopPlayer.score + 1
+                                    }
+                                    neededRoom[0].top = [updatePlayer, ...arDelPlayer]
+                                }
+                                newRooms = [neededRoom[0], ...arDelRoom];
+                                ctx.reply(`🥇 ${user[0].sex === 2 ? 'Выйграл' : 'Выйграла'} ${user[0].first_name} ${user[0].last_name}`).then(() => {
+                                    fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2))
+                                })
+                            } else {
+                                fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2))
+                            }
+                        }
+
+                    } catch (err) {
+                        console.error(err)
+                        ctx.reply('&#9762; Блин блинский, сбой какой-то, где-то создатель напортачил(')
+                    }
+                }
+                if (payload.action === 'giveRule') {
+                    bot.sendMessage(ctx.message.peer_id, 'Нажимая на кнопку \n"Взять карты", бот выдаст в лс твои карты,' +
+                        ' твоя задача набрать наибольшую сумму очков среди участников (максимально 21),' +
+                        ' нажимая на кнопку "Взять еще", - бот выдаст одну карту в лс, если будет перебор,' +
+                        ' ты автоматом будешь лохом. \nЕсли тебя устраивает сумма очков, нажми на кнопку' +
+                        ' "Показать карты"\n\nA - 11 очков\nK - 4\nQ - 3\nJ - 2\n10 - 10\n9 - 9\n8 - 8\n7 - 7\n6 - 6')
+                }
+            }
+        })
         //==========================================================================================
         bot.startPolling();
     } catch (err) {
