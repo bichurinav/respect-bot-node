@@ -651,7 +651,7 @@ async function start() {
                                 )
                             }
 
-                            bot.sendMessage(ctx.message.from_id, `-------\n[${cardOne.card}] [${cardTwo.card}]`)
+                            await bot.sendMessage(ctx.message.from_id, `-------\n[${cardOne.card}] [${cardTwo.card}]`)
 
                             if (cardOne.score + cardTwo.score === 22) {
                                 return ctx.reply('🃏 Выпало 22', null,
@@ -783,7 +783,7 @@ async function start() {
                         return ctx.reply(`📜 Список пуст...`)
                     }
                     const topPlayerList = topPlayers.map((el, idx) => {
-                        return `${idx + 1}. ${el.firstName} ${el.lastName} - ${el.score}`;
+                        return `${idx + 1}. ${el.firstName} ${el.lastName} - ${el.score}\n`;
                     })
                     return ctx.reply(`📜 Топ челов в 21\n${topPlayerList.join('')}`);
                 }
