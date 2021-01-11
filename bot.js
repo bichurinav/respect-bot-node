@@ -351,7 +351,7 @@ async function start() {
         //==========================================================================================
         // ***********    BETA     *********
         bot.command(/^!21$/, (ctx) => {
-            bot.sendMessage(ctx.message.peer_id, '🎯 Игра в 21 очко (beta version)', null, Markup
+            bot.sendMessage(ctx.message.peer_id, '🎯 Игра в 21 (beta version)', null, Markup
                 .keyboard([
                     Markup.button({
                         action: {
@@ -603,6 +603,46 @@ async function start() {
                     if (a.score === b.score) return 0;
                     if (a.score < b.score) return 1;
                 }
+                async function endGame(room, rooms = null, arDelRoom) {
+                    let newRooms = rooms;
+                    room.start = false;
+                    room.online = 0;
+                    const topPlayers = room.players.sort(compare)
+                    room.players = [];
+
+                    if (topPlayers[0].score === topPlayers[1].score) {
+                        await bot.sendMessage(ctx.message.peer_id, `🃏 Одинаковые очки, выйгрывает тот, кто первый раскрылся`);
+                    }
+
+                    const user = await bot.execute('users.get', {
+                        user_ids: topPlayers[0].user,
+                        fields: 'sex',
+                        name_case: 'Nom'
+                    })
+
+                    const existTopPlayer = room.top.filter(el => el.user === topPlayers[0].user)[0];
+                    if (!existTopPlayer) {
+                        room.top.push({
+                            user: topPlayers[0].user,
+                            firstName: user[0].first_name,
+                            lastName: user[0].last_name,
+                            score: 1
+                        });
+                    } else {
+                        const arDelPlayer = room.top.filter(el => el.user !== topPlayers[0].user)
+                        const updatePlayer = {
+                            user: topPlayers[0].user,
+                            firstName: user[0].first_name,
+                            lastName: user[0].last_name,
+                            score: existTopPlayer.score + 1
+                        }
+                        room.top = [updatePlayer, ...arDelPlayer]
+                    }
+                    newRooms = [room, ...arDelRoom];
+                    ctx.reply(`🥇 ${user[0].sex === 2 ? 'Выйграл' : 'Выйграла'} ${user[0].first_name} ${user[0].last_name}`).then(() => {
+                        fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2))
+                    })
+                }
                 const payload = JSON.parse(ctx.message.payload)
                 if (payload.action === 'takeCards') {
                     try {
@@ -626,7 +666,6 @@ async function start() {
                             await bot.sendMessage(ctx.message.from_id, `-------\n[${cardOne.card}] [${cardTwo.card}]`)
                             fs.writeFileSync('./cards21.json', JSON.stringify(rooms, null, 2))
                         } else {
-                            if (neededRoom[0].start) ctx.reply('🃏 Игроки играют, подождите...')
                             const players = neededRoom[0].players;
                             const existPlayer = players.filter(el => el.user === ctx.message.from_id)[0];
                             if (existPlayer) {
@@ -650,11 +689,16 @@ async function start() {
                                         .inline()
                                 )
                             }
+                            if (neededRoom[0].start) return ctx.reply('🃏 Игроки играют, подождите...')
 
                             await bot.sendMessage(ctx.message.from_id, `-------\n[${cardOne.card}] [${cardTwo.card}]`)
 
                             if (cardOne.score + cardTwo.score === 22) {
-                                return ctx.reply('🃏 Выпало 22', null,
+                                const user = await bot.execute('users.get', {
+                                    user_ids: ctx.message.from_id,
+                                    name_case: 'Gen'
+                                })
+                                return ctx.reply(`🃏 у ${user[0].first_name} выпало 22, хах, давай по новой)`, null,
                                     Markup
                                         .keyboard([
                                             Markup.button({
@@ -676,6 +720,7 @@ async function start() {
                                 cards: [`[${cardOne.card}]`, `[${cardTwo.card}]`],
                                 score: cardOne.score + cardTwo.score
                             })
+
                             neededRoom[0].online += 1;
                             const arDelRoom = rooms.filter(el => el.room !== ctx.message.peer_id);
                             const newRooms = [neededRoom[0], ...arDelRoom];
@@ -747,7 +792,6 @@ async function start() {
 
                         await bot.sendMessage(ctx.message.from_id, `[${card.card}]`)
 
-                        let newRooms = null;
                         neededRoom[0].start = true;
 
                         if (scorePlayer > 21) {
@@ -759,12 +803,15 @@ async function start() {
                             neededRoom[0].players = [updatePlayer, ...arDelPlayer];
                             neededRoom[0].online -= 1;
 
-                            newRooms = [neededRoom[0], ...arDelRoom];
+                            let newRooms = [neededRoom[0], ...arDelRoom];
                             await bot.sendMessage(ctx.message.peer_id, `🃏 ${user[0].first_name} — лох, перебор ${scorePlayer}`);
+                            if (neededRoom[0].online < 1) {
+                                return await endGame(neededRoom[0], [neededRoom[0], ...arDelRoom], arDelRoom)
+                            }
                             fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2));
                         } else {
                             neededRoom[0].players = [updatePlayer, ...arDelPlayer];
-                            newRooms = [neededRoom[0], ...arDelRoom];
+                            let newRooms = [neededRoom[0], ...arDelRoom];
                             fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2))
                         }
                     } catch (err) {
@@ -845,6 +892,14 @@ async function start() {
                             ctx.reply(`${user[0].first_name} ${user[0].sex === 2 ? 'проиграл' : 'проиграла'} с такими картами ${cards}`).then(() => {
                                 fs.writeFileSync('./cards21.json', JSON.stringify([neededRoom[0], ...arDelRoom], null, 2))
                             })
+                        } else if (existPlayer.score === 21) {
+                            const user = await bot.execute('users.get', {
+                                user_ids: ctx.message.from_id,
+                                fields: 'sex',
+                                name_case: 'Gen'
+                            })
+                            await bot.sendMessage(ctx.message.peer_id, `🃏 у ${user[0].first_name} ${cards}, ${user[0].sex === 2 ? 'набрал' : 'набрала'} — ${existPlayer.score}`)
+                            return await endGame(neededRoom[0], [neededRoom[0], ...arDelRoom], arDelRoom);
                         } else {
                             neededRoom[0].start = true;
                             neededRoom[0].online -= 1;
@@ -853,48 +908,13 @@ async function start() {
                                 fields: 'sex',
                                 name_case: 'Gen'
                             })
-
                             await bot.sendMessage(ctx.message.peer_id, `🃏 у ${user[0].first_name} ${cards}, ${user[0].sex === 2 ? 'набрал' : 'набрала'} — ${existPlayer.score}`)
-                            let newRooms = [neededRoom[0], ...arDelRoom];
-
                             if (neededRoom[0].online < 1) {
-                                neededRoom[0].start = false;
-                                neededRoom[0].online = 0;
-                                const topPlayers = neededRoom[0].players.sort(compare)
-                                neededRoom[0].players = [];
-                                const user = await bot.execute('users.get', {
-                                    user_ids: topPlayers[0].user,
-                                    fields: 'sex',
-                                    name_case: 'Nom'
-                                })
-
-                                const existTopPlayer = neededRoom[0].top.filter(el => el.user === topPlayers[0].user)[0];
-                                if (!existTopPlayer) {
-                                    neededRoom[0].top.push({
-                                        user: topPlayers[0].user,
-                                        firstName: user[0].first_name,
-                                        lastName: user[0].last_name,
-                                        score: 1
-                                    });
-                                } else {
-                                    const arDelPlayer = neededRoom[0].top.filter(el => el.user !== topPlayers[0].user)
-                                    const updatePlayer = {
-                                        user: topPlayers[0].user,
-                                        firstName: user[0].first_name,
-                                        lastName: user[0].last_name,
-                                        score: existTopPlayer.score + 1
-                                    }
-                                    neededRoom[0].top = [updatePlayer, ...arDelPlayer]
-                                }
-                                newRooms = [neededRoom[0], ...arDelRoom];
-                                ctx.reply(`🥇 ${user[0].sex === 2 ? 'Выйграл' : 'Выйграла'} ${user[0].first_name} ${user[0].last_name}`).then(() => {
-                                    fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2))
-                                })
+                                await endGame(neededRoom[0], [neededRoom[0], ...arDelRoom], arDelRoom);
                             } else {
-                                fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2))
+                                fs.writeFileSync('./cards21.json', JSON.stringify([neededRoom[0], ...arDelRoom], null, 2))
                             }
                         }
-
                     } catch (err) {
                         console.error(err)
                         ctx.reply('&#9762; Блин блинский, сбой какой-то, где-то создатель напортачил(')
