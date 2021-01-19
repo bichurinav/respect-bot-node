@@ -437,6 +437,9 @@ async function start() {
                             Markup.button('Видос &#127916;', 'default'),
                             Markup.button('Анекдот &#128518;', 'default'),
                             Markup.button('Gachi &#127814;', 'default'),
+                        ], [
+                            Markup.button('Мемас 🐸', 'default'),
+                            Markup.button('Мужик в пиве 🍺', 'default'),
                         ]
                     ])
                 )
@@ -484,7 +487,9 @@ async function start() {
         })
         //==========================================================================================
         // Случайный мем из группы VK
-        bot.command(/^!(mem|мем|memes|мемес)$/, async (ctx) => {
+        bot.command(/(mem|мем|memes|мемес|мемас|мемчик)/i, async (ctx) => {
+            antiSpam(ctx, 5);
+            if (!ctx.session.access) return;
             const arMemGroups = [-45745333, -155464693]; // Список групп (id)
             giveRandomPost(ctx, arMemGroups, 'photo');
         })
@@ -516,8 +521,27 @@ async function start() {
         //==========================================================================================
         // Случайный анекдот из группы VK
         bot.command(/(анек|анекдот|анекдоты)/i, async (ctx) => {
+            antiSpam(ctx, 5);
+            if (!ctx.session.access) return;
             const arAnecGroups = [-149279263]; // Список групп (id)
             giveRandomPost(ctx, arAnecGroups, 'text');
+        })
+        //==========================================================================================
+        // Выдать картинку - мужик в пиве
+        bot.command(/(пиво|пиве|beer|пивас|топливо|пить|бухать)/i, async (ctx) => {
+            antiSpam(ctx, 5);
+            if (!ctx.session.access) return;
+            try {
+                const {response} = await api('photos.get', {
+                    owner_id: -201031864,
+                    album_id: 275086127,
+                    access_token: config.get('access_token')
+                })
+                const picture = response.items[0];
+                ctx.reply('', `photo${picture.owner_id}_${picture.id}`)
+            } catch (e) {
+                console.error(e)
+            }
         })
         //==========================================================================================
         // Случайный gachimuchi
@@ -684,7 +708,6 @@ async function start() {
         // 21 - card game (action buttons)
         bot.event('message_new', async (ctx) => {
             if (ctx.message.payload) {
-
                 function compare(a, b) {
                     if (a.score > b.score) return -1;
                     if (a.score === b.score) return 0;
