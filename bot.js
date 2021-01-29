@@ -488,9 +488,9 @@ async function start() {
         //==========================================================================================
         // Случайный мем из группы VK
         bot.command(/(mem|мем|memes|мемес|мемас|мемчик)/i, async (ctx) => {
-            antiSpam(ctx, 5);
+            antiSpam(ctx, 3);
             if (!ctx.session.access) return;
-            const arMemGroups = [-45745333, -155464693]; // Список групп (id)
+            const arMemGroups = [-45745333, -155464693, -163058008]; // Список групп (id)
             giveRandomPost(ctx, arMemGroups, 'photo');
         })
         //==========================================================================================
@@ -521,27 +521,74 @@ async function start() {
         //==========================================================================================
         // Случайный анекдот из группы VK
         bot.command(/(анек|анекдот|анекдоты)/i, async (ctx) => {
-            antiSpam(ctx, 5);
+            antiSpam(ctx, 3);
             if (!ctx.session.access) return;
             const arAnecGroups = [-149279263]; // Список групп (id)
             giveRandomPost(ctx, arAnecGroups, 'text');
         })
         //==========================================================================================
-        // Выдать картинку - мужик в пиве
-        bot.command(/(мужика\sв\sпиве|мужик\sв\sпиве|пиво\sв\sмужике)/i, async (ctx) => {
-            antiSpam(ctx, 5);
+        // Выдать картинки из альбома группы
+        async function getPictureFromAlbum(ctx, text, albumID = 275086127) {
+            antiSpam(ctx, 3);
             if (!ctx.session.access) return;
             try {
                 const {response} = await api('photos.get', {
                     owner_id: -201031864,
-                    album_id: 275086127,
+                    album_id: albumID,
                     access_token: config.get('access_token')
                 })
-                const picture = response.items[0];
-                ctx.reply('', `photo${picture.owner_id}_${picture.id}`)
-            } catch (e) {
-                console.error(e)
+                const pictures = response.items;
+                const picture = pictures.filter(el => el.text === text)[0]
+                return [picture.owner_id, picture.id]
+
+            } catch (err) {
+                console.error(err);
             }
+        }
+        // Выдать картинку - мужик в пиве
+        bot.command(/(мужика\sв\sпиве|мужик\sв\sпиве|пиво\sв\sмужике)/i, async (ctx) => {
+            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'Мужик в пиве');
+            ctx.reply('', `photo${ownerID}_${pictureID}`)
+        })
+        bot.command(/(стетхем|стэтхэм|стейтем|джейсон|стетхам|стэтхам)/i, async (ctx) => {
+            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'стейтем');
+            ctx.reply('', `photo${ownerID}_${pictureID}`)
+        })
+        bot.command(/(пудж|падж|пудге|pudge|пуджик|быдло|паджик)/i, async (ctx) => {
+            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'пудж');
+            ctx.reply('', `photo${ownerID}_${pictureID}`)
+        })
+        bot.command(/(суета)/i, async (ctx) => {
+            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'суета');
+            ctx.reply('', `photo${ownerID}_${pictureID}`)
+        })
+        bot.command(/(пам парам|пам-парам)/i, async (ctx) => {
+            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'пам-парам');
+            ctx.reply('', `photo${ownerID}_${pictureID}`)
+        })
+        bot.command(/(чотко|заебись|збс|заебумба|четко|чётка|внатуре|класс|могёте|могете)/i, async (ctx) => {
+            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'чотко');
+            ctx.reply('', `photo${ownerID}_${pictureID}`)
+        })
+        bot.command(/(хапать|накурите|курить|напас|косяк|нахапайте|хапнем|накуриться)/i, async (ctx) => {
+            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'smoke');
+            ctx.reply('', `photo${ownerID}_${pictureID}`)
+        })
+        bot.command(/(кайф|кайфую|каеф)/i, async (ctx) => {
+            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'кайф');
+            ctx.reply('', `photo${ownerID}_${pictureID}`)
+        })
+        bot.command(/(занят|занятой|у меня дела)/i, async (ctx) => {
+            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'занят');
+            ctx.reply('', `photo${ownerID}_${pictureID}`)
+        })
+        bot.command(/займите/i, async (ctx) => {
+            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'займите');
+            ctx.reply('', `photo${ownerID}_${pictureID}`)
+        })
+        bot.command(/хокаге/i, async (ctx) => {
+            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'хокаге');
+            ctx.reply('', `photo${ownerID}_${pictureID}`)
         })
         //==========================================================================================
         // Случайный gachimuchi
