@@ -566,7 +566,7 @@ async function start() {
             const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'пам-парам');
             ctx.reply('', `photo${ownerID}_${pictureID}`)
         })
-        bot.command(/(чотко|заебись|збс|заебумба|четко|чётка|внатуре|класс|могёте|могете)/i, async (ctx) => {
+        bot.command(/(заебись|збс|заебумба|ч(е|ё|о)тк(о|а)|внатуре|класс|могёте|могете)/i, async (ctx) => {
             const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'чотко');
             ctx.reply('', `photo${ownerID}_${pictureID}`)
         })
