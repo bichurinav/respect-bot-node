@@ -10,7 +10,7 @@ const axios = require('axios');
 const config = require('config');
 const fs = require('fs');
 
-const token = config.get('token');
+const token = config.get('token_dev');
 const dbURL = config.get('database');
 const bot = new VK(token);
 bot.use(session.middleware());
@@ -24,7 +24,7 @@ const arCards21 = [
 async function start() {
     try {
         // Подключение к базе данных
-        await mongoose.connect(dbURL, {useNewUrlParser: true, useUnifiedTopology: true});
+        //await mongoose.connect(dbURL, {useNewUrlParser: true, useUnifiedTopology: true});
         // Получаем нужного пользователя
         async function getNeededUser(ctx, user, conversationID, userID) {
             try {
@@ -59,6 +59,14 @@ async function start() {
                 if (stateRU === 'репорт') return 'report';
             }
             return ctx.message.text.match(/(report|respect|res|rep)/ig)[0]
+        }
+        async function getUser(userID, nameCase = 'nom') {
+            const user = await bot.execute('users.get', {
+                user_ids: userID,
+                fields: 'sex',
+                name_case: nameCase
+            })
+            return user[0]
         }
         // Ищем совпадение команды на статус
         function findStatus(ctx) {
@@ -529,8 +537,6 @@ async function start() {
         //==========================================================================================
         // Выдать картинки из альбома группы
         async function getPictureFromAlbum(ctx, text, albumID = 275086127) {
-            antiSpam(ctx, 3);
-            if (!ctx.session.access) return;
             try {
                 const {response} = await api('photos.get', {
                     owner_id: -201031864,
@@ -545,6 +551,24 @@ async function start() {
                 console.error(err);
             }
         }
+        bot.command(/^кто я из реальных пацанов$/, async (ctx) => {
+            try {
+                const arPeople = [
+                    'Антоха', 'Арменка', 'Валя', 'Базанов',
+                    'Колян', 'Вован', 'Гена', 'Ковальчук',
+                    'Маринка', 'Машка', 'Эдик',
+                    'Игорь Сергеевич', 'Сергей Иванович'
+                ]
+                const userID = ctx.message.from_id;
+                const person = arPeople[getRandomInt(0, arPeople.length)];
+                const [ownerID, pictureID] = await getPictureFromAlbum(ctx, person, 275747257);
+                const user = await getUser(userID);
+                ctx.reply(`${user.first_name}, ты ${person}`, `photo${ownerID}_${pictureID}`);
+            } catch(err) {
+                console.log(err)
+                return ctx.reply('&#9762; Блин блинский, сбой какой-то, где-то создатель напортачил(')
+            }
+        })
         // Выдать картинку - мужик в пиве
         bot.command(/(мужика\sв\sпиве|мужик\sв\sпиве|пиво\sв\sмужике)/i, async (ctx) => {
             const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'Мужик в пиве');
@@ -554,7 +578,7 @@ async function start() {
             const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'стейтем');
             ctx.reply('', `photo${ownerID}_${pictureID}`)
         })
-        bot.command(/(пудж|падж|пудге|pudge|пуджик|быдло|паджик)/i, async (ctx) => {
+        bot.command(/(пудж|падж|(п|р)удге|pudge|пуджик|быдло|паджик)/i, async (ctx) => {
             const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'пудж');
             ctx.reply('', `photo${ownerID}_${pictureID}`)
         })
@@ -564,6 +588,14 @@ async function start() {
         })
         bot.command(/(пам парам|пам-парам)/i, async (ctx) => {
             const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'пам-парам');
+            ctx.reply('', `photo${ownerID}_${pictureID}`)
+        })
+        bot.command(/папич/i, async (ctx) => {
+            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'папич');
+            ctx.reply('', `photo${ownerID}_${pictureID}`)
+        })
+        bot.command(/ныаа/i, async (ctx) => {
+            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'ныа');
             ctx.reply('', `photo${ownerID}_${pictureID}`)
         })
         bot.command(/(заебись|збс|заебумба|ч(е|ё|о)тк(о|а)|внатуре|класс|могёте|могете)/i, async (ctx) => {
@@ -714,9 +746,9 @@ async function start() {
             checkAdmin(ctx, clearTop21.bind(null, ctx))
         })
         //==========================================================================================
-        // Очистить игроков в игре 21
-        bot.command(/^!21\sclear\sgame$/, (ctx) => {
-            async function clearGame21(ctx) {
+        // Очистить игроков в игре 21 (Обновить игру)
+        bot.command(/^!21\supdate\sgame$/, (ctx) => {
+            async function updateGame21(ctx) {
                 try {
                     const rooms = JSON.parse(fs.readFileSync('./cards21.json', 'utf-8'));
                     const conversationID = ctx.message.peer_id;
@@ -749,6 +781,13 @@ async function start() {
                     return ctx.reply('&#9762; Блин блинский, сбой какой-то, где-то создатель напортачил(')
                 }
             }
+            checkAdmin(ctx, updateGame21.bind(null, ctx))
+        })
+        bot.command((/^!21 clrg$/), (ctx) => {
+            function clearGame21() {
+                fs.writeFileSync('./cards21.json', JSON.stringify([], null, 2));
+
+            }
             checkAdmin(ctx, clearGame21.bind(null, ctx))
         })
         //==========================================================================================
@@ -759,14 +798,6 @@ async function start() {
                     if (a.score > b.score) return -1;
                     if (a.score === b.score) return 0;
                     if (a.score < b.score) return 1;
-                }
-                async function getUser(userID, nameCase) {
-                    const user = await bot.execute('users.get', {
-                        user_ids: userID,
-                        fields: 'sex',
-                        name_case: nameCase
-                    })
-                    return user[0]
                 }
                 async function endGame(room, arDelRoom) {
                     room.start = false;
