@@ -569,6 +569,25 @@ async function start() {
                 return ctx.reply('&#9762; Блин блинский, сбой какой-то, где-то создатель напортачил(')
             }
         })
+        bot.command(/^кто я из доты$/, async (ctx) => {
+            try {
+                const arDoters = [
+                    'водный', 'анти крип', 'крипочек', 'огр маги',
+                    'падж танцор', 'петух', 'акс', 'пудж охотник',
+                    'пудж с украины', 'рудге инвалидус', 'чёрный',
+                    'пудж с завода', 'школьный пудж', 'الله أكبر',
+                    'wk papi4'
+                ]
+                const userID = ctx.message.from_id;
+                const doter = arDoters[getRandomInt(0, arDoters.length)];
+                const [ownerID, pictureID] = await getPictureFromAlbum(ctx, doter, 275747257);
+                const user = await getUser(userID);
+                ctx.reply(`${user.first_name}, ты ${doter}`, `photo${ownerID}_${pictureID}`);
+            } catch(err) {
+                console.log(err)
+                return ctx.reply('&#9762; Блин блинский, сбой какой-то, где-то создатель напортачил(')
+            }
+        })
         // Выдать картинку - мужик в пиве
         bot.command(/(мужика\sв\sпиве|мужик\sв\sпиве|пиво\sв\sмужике)/i, async (ctx) => {
             const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'Мужик в пиве');
