@@ -573,14 +573,14 @@ async function start() {
             try {
                 const arDoters = [
                     'водный', 'анти крип', 'крипочек', 'огр маги',
-                    'падж танцор', 'петух', 'акс', 'пудж охотник',
+                    'падж танцор', 'петух', 'axe', 'пудж охотник',
                     'пудж с украины', 'рудге инвалидус', 'чёрный',
-                    'пудж с завода', 'школьный пудж', 'الله أكبر',
+                    'пудж с завода', 'школьный пуджик', 'الله أكبر',
                     'wk papi4'
                 ]
                 const userID = ctx.message.from_id;
                 const doter = arDoters[getRandomInt(0, arDoters.length)];
-                const [ownerID, pictureID] = await getPictureFromAlbum(ctx, doter, 275747257);
+                const [ownerID, pictureID] = await getPictureFromAlbum(ctx, doter, 275750553);
                 const user = await getUser(userID);
                 ctx.reply(`${user.first_name}, ты ${doter}`, `photo${ownerID}_${pictureID}`);
             } catch(err) {
