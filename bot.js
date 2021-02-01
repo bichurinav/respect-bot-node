@@ -10,7 +10,7 @@ const axios = require('axios');
 const config = require('config');
 const fs = require('fs');
 
-const token = config.get('token_dev');
+const token = config.get('token');
 const dbURL = config.get('database');
 const bot = new VK(token);
 bot.use(session.middleware());
@@ -24,7 +24,7 @@ const arCards21 = [
 async function start() {
     try {
         // Подключение к базе данных
-        //await mongoose.connect(dbURL, {useNewUrlParser: true, useUnifiedTopology: true});
+        await mongoose.connect(dbURL, {useNewUrlParser: true, useUnifiedTopology: true});
         // Получаем нужного пользователя
         async function getNeededUser(ctx, user, conversationID, userID) {
             try {
