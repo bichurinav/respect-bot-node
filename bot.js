@@ -1,3 +1,7 @@
+//=-==-==-==-==-==-==-==-==-==-==-==-==-==-==-=
+// БОТ СОЗДАВАЛСЯ ДЛЯ РАЗВЛЕЧЕНИЯ В БЕСЕДАХ VK
+// author: Bichurin Artem bichurinet@ya.ru
+//=-==-==-==-==-==-==-==-==-==-==-==-==-==-==-=
 const VK = require('node-vk-bot-api');
 const api = require('node-vk-bot-api/lib/api');
 const Markup = require('node-vk-bot-api/lib/markup');
@@ -38,7 +42,7 @@ async function start() {
                     return new RegExp(user, 'i').test(profile.screen_name);
                 })[0];
             } catch (e) {
-                ctx.reply('&#9762; Для работы бота нужна админка!');
+                ctx.reply('☢ Для выполнения этой команды, боту нужна админка!');
             }
         }
         // Получаем нужную комнату
@@ -48,7 +52,6 @@ async function start() {
                 return arRooms.filter(el => el.room === conversationID)[0]
             } catch (err) {
                 console.error(err)
-                ctx.reply('&#9762; Произошла ошибка, не могу получить комнаты');
             }
         }
         // Ищем совпадение команды на респект/репорт
@@ -60,17 +63,19 @@ async function start() {
             }
             return ctx.message.text.match(/(report|respect|res|rep)/ig)[0]
         }
+        // Получить информацию о пользователе
         async function getUser(userID, nameCase = 'nom') {
-            const user = await bot.execute('users.get', {
-                user_ids: userID,
-                fields: 'sex',
-                name_case: nameCase
-            })
-            return user[0]
-        }
-        // Ищем совпадение команды на статус
-        function findStatus(ctx) {
-            return ctx.message.text.match(/(status|st)/ig)[0]
+            try {
+                const user = await bot.execute('users.get', {
+                    user_ids: userID,
+                    fields: 'sex',
+                    name_case: nameCase
+                })
+                return user[0]
+            } catch(err) {
+                console.error(err);
+                console.log('☢ Блин блинский, сбой какой-то, где-то создатель напортачил(');
+            }
         }
         // Получает мин. сек. мс.
         function getTime(unix) {
@@ -88,40 +93,45 @@ async function start() {
             return Math.floor(Math.random() * (max - min)) + min;
         }
         // Против спама
-        function antiSpam(ctx, delay = 10) {
+        async function antiSpam(ctx, delay = 10) {
             ctx.session.userTime = ctx.session.userTime || getTime(ctx.message.date);
-            ctx.session.warn = ctx.session.warn || 'warn';
-            function check(res) {
+            ctx.session.userReg = ctx.session.userReg || false;
+            ctx.session.warn = ctx.session.warn || false;
+            //console.log(ctx.session.userTime.s, getTime(ctx.message.date).s);
+            async function check(res) {
                 if (res < delay) {
-                    ctx.session.access = false;
-                    if (ctx.session.warn === 'warn') {
-                        ctx.reply(`&#8987; Подождите еще ${delay - (getTime(ctx.message.date).s - ctx.session.userTime.s)} сек.`).then(() => {
-                            ctx.session.warn = 'no-warn';
-                        })
+                    if (!ctx.session.warn) {
+                        ctx.session.warn = true;
+                        await bot.sendMessage(ctx.message.peer_id, `⌛ Подождите еще ${delay - res} сек.`)
                     }
+                    return true;
                 } else {
-                    ctx.session.warn = 'warn';
                     ctx.session.userTime = getTime(ctx.message.date);
-                    ctx.session.access = true;
+                    ctx.session.warn = false;
+                    return false;
                 }
             }
             if (ctx.session.userTime.m === getTime(ctx.message.date).m) {
-                if (ctx.session.userTime.ms !== getTime(ctx.message.date).ms) {
-                    check(getTime(ctx.message.date).s - ctx.session.userTime.s)
-                } else {
+                if (ctx.session.userTime.ms === getTime(ctx.message.date).ms) {
                     ctx.session.userTime = getTime(ctx.message.date);
-                    ctx.session.access = true;
+                    ctx.session.warn = false;
+                    return false;
+                } else {
+                    if (!ctx.session.userReg) {
+                        ctx.session.userReg = true;
+                        return false;
+                    }
+                    return await check(getTime(ctx.message.date).s - ctx.session.userTime.s)
                 }
             } else {
-                ctx.session.userTime = getTime(ctx.message.date);
-                let res = 60 - ctx.session.userTime.s + getTime(ctx.message.date).s;
-                check(res);
+                let res = 60 - (ctx.session.userTime.s - getTime(ctx.message.date).s);
+                return await check(res);
             }
         }
         // Кидает репорт/респект
         async function sayStateForUser(ctx, reason, dropUser, dropUserID = null) {
-            antiSpam(ctx, 5);
-            if (!ctx.session.access) return;
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
             let state = findState(ctx);
             // id беседы
             const roomID = ctx.message.peer_id;
@@ -163,7 +173,7 @@ async function start() {
                 }
 
                 // Меняем статус пользователя
-                function changeStatus(respect, report) {
+                function getStatus(respect, report) {
                     if (respect / report > 2) {
                         if (neededUser.sex === 1) return 'Респектабельная';
                         return 'Респектабельный'
@@ -244,7 +254,7 @@ async function start() {
                         room.updateOne({room: roomID, 'list.user': neededUser.screen_name}, {
                             $set: {
                                 'list.$.respect': respect,
-                                'list.$.status': changeStatus(respect, report),
+                                'list.$.status': getStatus(respect, report),
                                 'list.$.merit': arMerit
                             }
                         }).then(() => {
@@ -259,7 +269,7 @@ async function start() {
                         room.updateOne({room: roomID, 'list.user': neededUser.screen_name}, {
                             $set: {
                                 'list.$.report': report,
-                                'list.$.status': changeStatus(respect, report),
+                                'list.$.status': getStatus(respect, report),
                                 'list.$.fail': arFail
                             }
                         }).then(() => {
@@ -277,16 +287,18 @@ async function start() {
             try {
                 const res = await bot.execute('messages.getConversationMembers', {
                     peer_id: ctx.message.peer_id,
-                })
+                })            
                 const admins = res.items.filter(item => item.is_admin)
                     .filter(admin => admin.member_id === ctx.message.from_id);
                 if (admins.length > 0) {
                     callback();
                 } else {
+                    if (res.profiles.length === 1) return callback()
                     ctx.reply('&#9762; Доступ запрещен, вы не администратор!');
                 }
             } catch (e) {
-                ctx.reply('&#9762; Для работы бота нужна админка!');
+                console.error(e);
+                ctx.reply('☢ Для выполнения этой команды, боту нужна админка!');
             }
         }
         // Получить посты группы или кол-во записей
@@ -310,13 +322,12 @@ async function start() {
             });
             if (filterPosts.length < 1) {
                 return getFilterPosts(groupID, countPosts, offsetPosts, postType)
+            } else {
+                return filterPosts;
             }
-            return filterPosts;
         }
         // Получить случайный, нужный пост
         async function giveRandomPost(ctx, groups, type) {
-            antiSpam(ctx, 4);
-            if (!ctx.session.access) return;
             ctx.session.group = '';
             try {
                 // Выводит пост
@@ -348,11 +359,11 @@ async function start() {
                 } else {
                     post = randomPost;
                 }
-                if (!post) return bot.sendMessage(ctx.message.peer_id, `&#9762; Блин блинский, давай еще раз(`);
+                if (!post) return bot.sendMessage(ctx.message.peer_id, `☢ Блин блинский, давай еще раз(`);
                 // Выводим пост
                 sendPost(ctx.message.peer_id);
             } catch (err) {
-                ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
+                ctx.reply('☢ Блин блинский, не могу выдать, сбой какой-то(')
                 console.error(err);
             }
         }
@@ -409,22 +420,51 @@ async function start() {
                 .inline()
             )
         }
+        // Выдать нужную фотографию из альбома группы
+        async function getPictureFromAlbum(ctx, text, albumID = 275086127) {
+            try {
+                const {response} = await api('photos.get', {
+                    owner_id: -201031864,
+                    album_id: albumID,
+                    access_token: config.get('access_token')
+                })
+                const pictures = response.items;
+                const picture = pictures.filter(el => el.text === text)[0]
+                return `photo${picture.owner_id}_${picture.id}`
+
+            } catch (err) {
+                console.error(err);
+            }
+        }
+        // Выдать пользователю картинку - кем он является
+        async function sendUserWhoHe(ctx, arPerson, albumID = 275086127) {
+            try {
+                const userID = ctx.message.from_id;
+                const randomItem = arPerson[getRandomInt(0, arPerson.length)];
+                const picture = await getPictureFromAlbum(ctx, randomItem, albumID);
+                const user = await getUser(userID);
+                ctx.reply(`${user.first_name}, ты ${randomItem}`, picture);
+            } catch(err) {
+                console.error(err)
+                return ctx.reply('☢ Блин блинский, не могу выдать, где-то создатель напортачил(')
+            }
+        }
         //==========================================================================================
-        // Выдать меню для игры в 21
-        bot.command(/^!21$/, (ctx) => {
-            showButtons21(ctx.message.peer_id)
+        // Отправить сссылку на инструцию по использованию бота
+        bot.command(/^!(help|хелп|помощь)$/, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const res = await getPosts(-201031864, 1, 0);
+            const insructionLink = res[0].attachments[0].link.url;
+            const insructionTitle = res[0].attachments[0].link.title;
+            ctx.reply(insructionTitle + '\n' + insructionLink)
         })
         //==========================================================================================
-        // Выдать список команд
-        bot.command(/^!(help|хелп)$/, (ctx) => {
-            ctx.reply('---- &#9997; Мои команды ----\n\n&#128237; [по пересланному сообщению]\n!res - кинуть респект своему хоуми\n' +
-                '!rep - зарепортить\n!rep или !res <можно указать причину>\n\n&#127942; [топы]\n' +
-                '!top res - топ челов по респектам\n!top rep - топ челов по репортам\n\n' +
-                '&#128511; [по id]\n!rep или !res @id <можно указать причину>\n!st @id - узнать статус чела\n\n' +
-                '&#127916; [видосики]\n!видос - случайный видос\n!видос ласт - последний видос\n\n' +
-                '🐸 [мемы]\n!мем - случайный мем\n\n' +
-                '&#128225; [по любому упоминанию]\nанек - случайный анекдот\nгачи - случайный гачист\n\n' +
-                '&#128526; [для администраторв]\n!btn - добавляет меню\n!btn del - удаляет меню');
+        // Выдать меню для игры в 21
+        bot.command(/^!21$/, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            showButtons21(ctx.message.peer_id)
         })
         //==========================================================================================
         // Убрать у бота кнопки
@@ -442,11 +482,11 @@ async function start() {
                 ctx.reply('Кнопки активированы &#127918;', null, Markup
                     .keyboard([
                         [
-                            Markup.button('Видос &#127916;', 'default'),
-                            Markup.button('Анекдот &#128518;', 'default'),
-                            Markup.button('Gachi &#127814;', 'default'),
-                        ], [
+                            Markup.button('Видос 🎬', 'default'),
+                            Markup.button('Анекдот 😆', 'default'),
                             Markup.button('Мемас 🐸', 'default'),
+                        ], [
+                            Markup.button('Gachi 🍆', 'default'),
                             Markup.button('Мужик в пиве 🍺', 'default'),
                         ]
                     ])
@@ -476,192 +516,7 @@ async function start() {
             checkAdmin(ctx, addButton21.bind(null, ctx))
         });
         //==========================================================================================
-        // Рандомное видео из группы VK
-        const arVideoGroups = [-30316056, -167127847]; // Список групп (id)
-        bot.command(/(^!(video|видос)$|\[[\w]+\W@[\w-]+\]\sвидос|видос\s🎬)/i, async (ctx) => {
-            giveRandomPost(ctx, arVideoGroups, 'video');
-        });
-        // Последнее видео из группы VK
-        bot.command(/^!(video|видос)\s(last|ласт)$/, async (ctx) => {
-            try {
-                const randomGroupVideo = arVideoGroups[getRandomInt(0, arVideoGroups.length)];
-                const videoPosts = await getFilterPosts(randomGroupVideo, 20, 0, 'video');
-                const video = videoPosts[0].attachments[0].video;
-                bot.sendMessage(ctx.message.peer_id, '', `video${video.owner_id}_${video.id}`);
-            } catch (err) {
-                ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
-                console.error(err);
-            }
-        })
-        //==========================================================================================
-        // Случайный мем из группы VK
-        bot.command(/(mem|мем|memes|мемес|мемас|мемчик)/i, async (ctx) => {
-            antiSpam(ctx, 3);
-            if (!ctx.session.access) return;
-            const arMemGroups = [-45745333, -155464693, -163058008]; // Список групп (id)
-            giveRandomPost(ctx, arMemGroups, 'photo');
-        })
-        //==========================================================================================
-        // Случайный анекдот для дедов
-        bot.command(/^!(anec old|анек олд|анекдот олд)$/i, (ctx) => {
-            antiSpam(ctx, 5);
-            if (!ctx.session.access) return;
-            async function getAnecdote() {
-                try {
-                    return axios.get(
-                        'http://rzhunemogu.ru/RandJSON.aspx?CType=11',
-                        {
-                            responseType: 'arraybuffer',
-                            responseEncoding: 'binary'
-                        })
-                        .then(response => iconv.decode(Buffer.from(response.data), 'windows-1251'))
-                } catch (err) {
-                    ctx.reply('&#9762; Блин, не могу выдать, сбой какой-то(')
-                    console.error(err)
-                }
-            }
-            getAnecdote(ctx).then(data => {
-                let anecdote = data.replace(/\{"content":"/, '');
-                anecdote = anecdote.split('"}')[0]
-                ctx.reply(anecdote)
-            })
-        })
-        //==========================================================================================
-        // Случайный анекдот из группы VK
-        bot.command(/(анек|анекдот|анекдоты)/i, async (ctx) => {
-            antiSpam(ctx, 3);
-            if (!ctx.session.access) return;
-            const arAnecGroups = [-149279263]; // Список групп (id)
-            giveRandomPost(ctx, arAnecGroups, 'text');
-        })
-        //==========================================================================================
-        // Выдать картинки из альбома группы
-        async function getPictureFromAlbum(ctx, text, albumID = 275086127) {
-            try {
-                const {response} = await api('photos.get', {
-                    owner_id: -201031864,
-                    album_id: albumID,
-                    access_token: config.get('access_token')
-                })
-                const pictures = response.items;
-                const picture = pictures.filter(el => el.text === text)[0]
-                return [picture.owner_id, picture.id]
-
-            } catch (err) {
-                console.error(err);
-            }
-        }
-        bot.command(/^кто я из реальных пацанов$/, async (ctx) => {
-            try {
-                const arPeople = [
-                    'Антоха', 'Арменка', 'Валя', 'Базанов',
-                    'Колян', 'Вован', 'Гена', 'Ковальчук',
-                    'Маринка', 'Машка', 'Эдик',
-                    'Игорь Сергеевич', 'Сергей Иванович'
-                ]
-                const userID = ctx.message.from_id;
-                const person = arPeople[getRandomInt(0, arPeople.length)];
-                const [ownerID, pictureID] = await getPictureFromAlbum(ctx, person, 275747257);
-                const user = await getUser(userID);
-                ctx.reply(`${user.first_name}, ты ${person}`, `photo${ownerID}_${pictureID}`);
-            } catch(err) {
-                console.log(err)
-                return ctx.reply('&#9762; Блин блинский, сбой какой-то, где-то создатель напортачил(')
-            }
-        })
-        bot.command(/^кто я из доты$/, async (ctx) => {
-            try {
-                const arDoters = [
-                    'водный', 'анти крип', 'крипочек', 'огры маги',
-                    'падж танцор', 'петух', 'axe', 'пудж охотник',
-                    'пудж с украины', 'рудге инвалидус', 'чёрный',
-                    'пудж с завода', 'школьный пуджик', 'гнида',
-                    'wk papi4', 'слепыш', 'шляпа усатая', 'крыса', 'колхозник',
-                    'некрофил', 'лёха', 'дерево', 'рыжая оторва',
-                    'сосалка местного двора', 'пенёк', 'чечен'
-                ]
-                const userID = ctx.message.from_id;
-                const doter = arDoters[getRandomInt(0, arDoters.length)];
-                const [ownerID, pictureID] = await getPictureFromAlbum(ctx, doter, 275750553);
-                const user = await getUser(userID);
-                ctx.reply(`${user.first_name}, ты ${doter}`, `photo${ownerID}_${pictureID}`);
-            } catch(err) {
-                console.log(err)
-                return ctx.reply('&#9762; Блин блинский, сбой какой-то, где-то создатель напортачил(')
-            }
-        })
-        // Выдать картинку - мужик в пиве
-        bot.command(/(мужика\sв\sпиве|мужик\sв\sпиве|пиво\sв\sмужике)/i, async (ctx) => {
-            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'Мужик в пиве');
-            ctx.reply('', `photo${ownerID}_${pictureID}`)
-        })
-        bot.command(/(стетхем|стэтхэм|стейтем|джейсон|стетхам|стэтхам)/i, async (ctx) => {
-            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'стейтем');
-            ctx.reply('', `photo${ownerID}_${pictureID}`)
-        })
-        bot.command(/(пудж|падж|(п|р)удге|pudge|пуджик|быдло|паджик)/i, async (ctx) => {
-            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'пудж');
-            ctx.reply('', `photo${ownerID}_${pictureID}`)
-        })
-        bot.command(/(суета)/i, async (ctx) => {
-            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'суета');
-            ctx.reply('', `photo${ownerID}_${pictureID}`)
-        })
-        bot.command(/(пам парам|пам-парам)/i, async (ctx) => {
-            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'пам-парам');
-            ctx.reply('', `photo${ownerID}_${pictureID}`)
-        })
-        bot.command(/папич/i, async (ctx) => {
-            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'папич');
-            ctx.reply('', `photo${ownerID}_${pictureID}`)
-        })
-        bot.command(/ныаа/i, async (ctx) => {
-            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'ныа');
-            ctx.reply('', `photo${ownerID}_${pictureID}`)
-        })
-        bot.command(/(заебись|збс|заебумба|ч(е|ё|о)тк(о|а)|внатуре|класс|могёте|могете)/i, async (ctx) => {
-            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'чотко');
-            ctx.reply('', `photo${ownerID}_${pictureID}`)
-        })
-        bot.command(/(хапать|накурите|курить|напас|косяк|нахапайте|хапнем|накуриться)/i, async (ctx) => {
-            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'smoke');
-            ctx.reply('', `photo${ownerID}_${pictureID}`)
-        })
-        bot.command(/(кайф|кайфую|каеф)/i, async (ctx) => {
-            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'кайф');
-            ctx.reply('', `photo${ownerID}_${pictureID}`)
-        })
-        bot.command(/(занят|занятой|у меня дела)/i, async (ctx) => {
-            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'занят');
-            ctx.reply('', `photo${ownerID}_${pictureID}`)
-        })
-        bot.command(/займите/i, async (ctx) => {
-            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'займите');
-            ctx.reply('', `photo${ownerID}_${pictureID}`)
-        })
-        bot.command(/хокаге/i, async (ctx) => {
-            const [ownerID, pictureID] = await getPictureFromAlbum(ctx, 'хокаге');
-            ctx.reply('', `photo${ownerID}_${pictureID}`)
-        })
-        //==========================================================================================
-        // Случайный gachimuchi
-        bot.command(/(гачи|gachi)/i, async (ctx) => {
-            antiSpam(ctx, 5);
-            if (!ctx.session.access) return;
-            const arGachi = ['&#9794;fuck you&#9794;', '&#9794;fucking slave&#9794;', '&#9794;boss on this gym&#9794;', '&#9794;dungeon master&#9794;', '&#9794;swallow my cum&#9794;', '&#9794;fat cock&#9794;', '&#9794;the semen&#9794;', '&#9794;full master&#9794;', '&#9794;drop of cum&#9794;', '&#9794;Billy&#9794;', '&#9794;do anal&#9794;', '&#9794;get your ass&#9794;', '&#9794;fisting anal&#9794;', '&#9794;long latex cock&#9794;', '&#9794;do finger in ass&#9794;', '&#9794;leatherman&#9794;', '&#9794;dick&#9794;', '&#9794;gay&#9794;', '&#9794;have nice ass&#9794;', '&#9794;boy next door&#9794;', '&#9794;Van&#9794;', '&#9794;leather stuff&#9794;', 'уклонился от gachimuchi'];
-            try {
-                const conversationID = ctx.message.peer_id;
-                const conversation = await bot.execute('messages.getConversationMembers', {
-                    peer_id: conversationID,
-                });
-                const randomPerson = conversation.profiles[getRandomInt(0, conversation.profiles.length)];
-                const randomGachi = arGachi[getRandomInt(0, arGachi.length - 1)];
-                ctx.reply(`@${randomPerson.screen_name}(${randomPerson.last_name}) ${randomGachi}`);
-            } catch (e) {
-                ctx.reply('&#9762; Для работы бота нужна админка!');
-            }
-        });
-        //==========================================================================================
+        // Система уважений и жалоб (респектов/репортов)
         bot.command(/!(report|respect|res|rep)\s\[[\w]+\W@[\w-]+\]\s[a-zа-я0-9\W]+/i, async (ctx) => {
             // Пользователя которого ввели
             const dropUser = ctx.message.text.match(/@[\w-]+/ig)[0].slice(1);
@@ -685,8 +540,215 @@ async function start() {
             sayStateForUser(ctx, null, null, dropUserID);
         });
         //==========================================================================================
-        // Посмореть статистику пользователя
+        // Рандомное видео из группы VK
+        bot.command(/(^!(video|видос)$|\[[\w]+\W@[\w-]+\]\sвидос|видос\s🎬)/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const arVideoGroups = [-30316056, -167127847]; // Список групп (id)
+            giveRandomPost(ctx, arVideoGroups, 'video');
+        });
+        // Последнее видео из группы VK
+        bot.command(/^!(video|видос)\s(last|ласт)$/, async (ctx) => {
+            try {
+                const spam = await antiSpam(ctx, 5);
+                if (spam) return;
+                const randomGroupVideo = arVideoGroups[getRandomInt(0, arVideoGroups.length)];
+                const videoPosts = await getFilterPosts(randomGroupVideo, 20, 0, 'video');
+                const video = videoPosts[0].attachments[0].video;
+                bot.sendMessage(ctx.message.peer_id, '', `video${video.owner_id}_${video.id}`);
+            } catch (err) {
+                ctx.reply('&#9762; Блин блинский, не могу выдать, сбой какой-то(')
+                console.error(err);
+            }
+        })
+        //==========================================================================================
+        // Случайный мем из группы VK
+        bot.command(/(me(m|es)|ме(м|мес|мчик|мас))/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const arMemGroups = [-45745333, -155464693, -163058008]; // Список групп (id)
+            giveRandomPost(ctx, arMemGroups, 'photo');
+        })
+        //==========================================================================================
+        // Случайный анекдот для дедов
+        bot.command(/^!(anec old|анек олд|анекдот олд)$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            async function getAnecdote() {
+                try {
+                    return axios.get(
+                        'http://rzhunemogu.ru/RandJSON.aspx?CType=11',
+                        {
+                            responseType: 'arraybuffer',
+                            responseEncoding: 'binary'
+                        })
+                        .then(response => iconv.decode(Buffer.from(response.data), 'windows-1251'))
+                } catch (err) {
+                    ctx.reply('&#9762; Блин блинский, не могу выдать, сбой какой-то(')
+                    console.error(err)
+                }
+            }
+            getAnecdote(ctx).then(data => {
+                let anecdote = data.replace(/\{"content":"/, '');
+                anecdote = anecdote.split('"}')[0]
+                ctx.reply(anecdote)
+            })
+        })
+        //==========================================================================================
+        // Случайный анекдот из группы VK
+        bot.command(/(ане(к|дот(ы)))/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const arAnecGroups = [-149279263]; // Список групп (id)
+            giveRandomPost(ctx, arAnecGroups, 'text');
+        })
+        //==========================================================================================
+        // Кто я из - отправялет случайного персонажа пользователю
+        bot.command(/^кто я из реальных пацанов$/, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const arRealGuys = [
+                'Антоха', 'Арменка', 'Валя', 'Базанов',
+                'Колян', 'Вован', 'Гена', 'Ковальчук',
+                'Маринка', 'Машка', 'Эдик',
+                'Игорь Сергеевич', 'Сергей Иванович'
+            ]
+            sendUserWhoHe(ctx, arRealGuys, 275747257);
+        })
+        bot.command(/^кто я из доты$/, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const arDoters = [
+                'водный', 'анти крип', 'крипочек', 'огры маги',
+                'падж танцор', 'петух', 'axe', 'пудж охотник',
+                'пудж с украины', 'рудге инвалидус', 'чёрный',
+                'пудж с завода', 'школьный пуджик', 'гнида',
+                'wk papi4', 'слепыш', 'шляпа усатая', 'крыса', 'колхозник',
+                'некрофил', 'лёха', 'дерево', 'рыжая оторва',
+                'сосалка местного двора', 'пенёк', 'чечен'
+            ]
+            sendUserWhoHe(ctx, arDoters, 275750553);
+        })
+        //==========================================================================================
+        // Выдаёт нужные картинки по сообщению пользователя
+        bot.command(/(мужика в пиве|мужик в пиве|пиво в мужике)/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'Мужик в пиве');
+            ctx.reply('', picture)
+        })
+        bot.command(/(ст(е|э)тх(е|э|а)м)/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'стейтем');
+            ctx.reply('', picture)
+        })
+        bot.command(/(п(у|а)д(ж|жик)|(п|р)(у|а)дге|pudge|быдло)/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'пудж');
+            ctx.reply('', picture)
+        })
+        bot.command(/(сует(а|у))/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'суета');
+            ctx.reply('', picture)
+        })
+        bot.command(/(пам(-|\s)парам)/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'пам-парам');
+            ctx.reply('', picture)
+        })
+        bot.command(/папич/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'папич');
+            ctx.reply('', picture)
+        })
+        bot.command(/ныаа/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'ныа');
+            ctx.reply('', picture)
+        })
+        bot.command(/(классика|classic)/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'классика');
+            ctx.reply('', picture)
+        })
+        bot.command(/баян/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'баян');
+            ctx.reply('', picture)
+        })
+        bot.command(/(заеб(умба|ись)|збс|ч(е|ё|о)тк(о|а)|внатуре|класс|мог(ё|е)те)/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'чотко');
+            ctx.reply('', picture)
+        })
+        bot.command(/(хапать|накурите|курить|напас|косяк|нахапайте|хапнем|накуриться)/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'smoke');
+            ctx.reply('', picture)
+        })
+        bot.command(/(кай(ф|фую)|каеф)/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'кайф');
+            ctx.reply('', picture)
+        })
+        bot.command(/(заня(т|той)|у меня дела)/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'занят');
+            ctx.reply('', picture)
+        })
+        bot.command(/займите/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'займите');
+            ctx.reply('', picture)
+        })
+        bot.command(/хокаге/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'хокаге');
+            ctx.reply('', picture)
+        })
+        bot.command(/(горин|холодильник|что вы делаете в моем холодильнике|кушац)/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'горин');
+            ctx.reply('', picture)
+        })
+        //==========================================================================================
+        // Случайный Gachimuchi
+        bot.command(/(гачи|gachi)/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const arGachi = ['&#9794;fuck you&#9794;', '&#9794;fucking slave&#9794;', '&#9794;boss on this gym&#9794;', '&#9794;dungeon master&#9794;', '&#9794;swallow my cum&#9794;', '&#9794;fat cock&#9794;', '&#9794;the semen&#9794;', '&#9794;full master&#9794;', '&#9794;drop of cum&#9794;', '&#9794;Billy&#9794;', '&#9794;do anal&#9794;', '&#9794;get your ass&#9794;', '&#9794;fisting anal&#9794;', '&#9794;long latex cock&#9794;', '&#9794;do finger in ass&#9794;', '&#9794;leatherman&#9794;', '&#9794;dick&#9794;', '&#9794;gay&#9794;', '&#9794;have nice ass&#9794;', '&#9794;boy next door&#9794;', '&#9794;Van&#9794;', '&#9794;leather stuff&#9794;', 'уклонился от gachimuchi'];
+            try {
+                const conversationID = ctx.message.peer_id;
+                const conversation = await bot.execute('messages.getConversationMembers', {
+                    peer_id: conversationID,
+                });
+                const randomPerson = conversation.profiles[getRandomInt(0, conversation.profiles.length)];
+                const randomGachi = arGachi[getRandomInt(0, arGachi.length - 1)];
+                ctx.reply(`@${randomPerson.screen_name}(${randomPerson.last_name}) ${randomGachi}`);
+            } catch (e) {
+                ctx.reply('&#9762; Для работы бота нужна админка!');
+            }
+        });
+        // Посмореть статистику пользователя по респеткам/репортам
         bot.command(/^!(status|st)\s\[[\w]+\W@[\w-]+\]$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
             const user = ctx.message.text.match(/@[\w-]+/ig)[0].slice(1);
             const neededUser = await getNeededUser(ctx, user, ctx.message.peer_id);
             if (neededUser) {
@@ -712,12 +774,16 @@ async function start() {
             }
         });
         bot.command(/^!(status|st)$/i, async (ctx) => {
-            let state = findStatus(ctx);
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            let state = ctx.message.text.match(/(status|st)/ig)[0];
             ctx.reply(`!${state} @id`);
         });
         //==========================================================================================
         // Топ 10 участников по репортам/респектам
         bot.command(/^!(top|топ)\s(report|respect|res|rep)$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
             let state = findState(ctx);
             if (state === 'rep') state = 'report';
             if (state === 'res') state = 'respect';
@@ -742,6 +808,8 @@ async function start() {
             }
         });
         bot.command(/^!(top|топ)$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
             ctx.reply('&#9762; !top res или rep');
         });
         //==========================================================================================
@@ -807,7 +875,6 @@ async function start() {
         bot.command((/^!21 clrg$/), (ctx) => {
             function clearGame21() {
                 fs.writeFileSync('./cards21.json', JSON.stringify([], null, 2));
-
             }
             checkAdmin(ctx, clearGame21.bind(null, ctx))
         })
