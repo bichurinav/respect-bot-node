@@ -548,17 +548,18 @@ async function start() {
             giveRandomPost(ctx, arVideoGroups, 'video');
         });
         // Последнее видео из группы VK
-        bot.command(/^!(video|видос)\s(last|ласт)$/, async (ctx) => {
+        bot.command(/^!(video|вид(ео|ос))\s(last|ласт)$/, async (ctx) => {
             try {
                 const spam = await antiSpam(ctx, 5);
                 if (spam) return;
+                const arVideoGroups = [-30316056, -167127847]; // Список групп (id)
                 const randomGroupVideo = arVideoGroups[getRandomInt(0, arVideoGroups.length)];
                 const videoPosts = await getFilterPosts(randomGroupVideo, 20, 0, 'video');
                 const video = videoPosts[0].attachments[0].video;
                 bot.sendMessage(ctx.message.peer_id, '', `video${video.owner_id}_${video.id}`);
             } catch (err) {
-                ctx.reply('&#9762; Блин блинский, не могу выдать, сбой какой-то(')
                 console.error(err);
+                ctx.reply('&#9762; Блин блинский, не могу выдать, сбой какой-то(')
             }
         })
         //==========================================================================================
