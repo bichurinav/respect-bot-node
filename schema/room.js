@@ -14,7 +14,19 @@ const roomSchema = new Schema({
             merit: Array,
             fail: Array
         }
-    ]
+    ],
+    roulette: {
+        gameStarted: Boolean,
+        bullet: Number,
+        players: [
+            {
+                user: String,
+                bullet: Number,
+                shot: Boolean
+            }
+        ]
+    },
 });
+
 const room = mongoose.model('Room', roomSchema);
 module.exports = room;

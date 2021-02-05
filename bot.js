@@ -28,7 +28,7 @@ const arCards21 = [
 async function start() {
     try {
         // Подключение к базе данных
-        await mongoose.connect(dbURL, {useNewUrlParser: true, useUnifiedTopology: true});
+        await mongoose.connect(dbURL, {useNewUrlParser: true, useUnifiedTopology: true, useFindAndModify: false });
         // Получаем нужного пользователя
         async function getNeededUser(ctx, user, conversationID, userID) {
             try {
@@ -129,7 +129,7 @@ async function start() {
             }
         }
         // Кидает репорт/респект
-        async function sayStateForUser(ctx, reason, dropUser, dropUserID = null) {
+        async function sendStateUser(ctx, reason, dropUser, dropUserID = null) {
             const spam = await antiSpam(ctx, 5);
             if (spam) return;
             let state = findState(ctx);
@@ -163,7 +163,7 @@ async function start() {
                 function createRoomDB() {
                     return room.create({
                         room: roomID,
-                        list: []
+                        list: [],
                     })
                 }
                 // Отправляем результат пользователю
@@ -367,7 +367,7 @@ async function start() {
                 console.error(err);
             }
         }
-        // Получить меню для игры в 21
+        // Получить меню для игры в "21"
         function showButtons21(conversationID) {
             bot.sendMessage(conversationID, '🎯 Игра в 21 (beta version)', null, Markup
                 .keyboard([
@@ -420,6 +420,50 @@ async function start() {
                 .inline()
             )
         }
+        // Получить меню для игры в "Русскую рулетку"
+        function showButtonsRoulette(conversationID) {
+            bot.sendMessage(conversationID, '🎴 Русская рулетка (beta version)', null, Markup
+                .keyboard([
+                    Markup.button({
+                        action: {
+                            type: 'text',
+                            payload: JSON.stringify({
+                                action: 'takeRoulette',
+                            }),
+                            label: "Взять револьвер"
+                        }
+                    }),
+                    Markup.button({
+                        action: {
+                            type: 'text',
+                            payload: JSON.stringify({
+                                action: 'rouletteRoll',
+                            }),
+                            label: "Крутить барабан"
+                        }
+                    }),
+                    Markup.button({
+                        action: {
+                            type: 'text',
+                            payload: JSON.stringify({
+                                action: 'rouletteShoot',
+                            }),
+                            label: "Стрельнуть"
+                        }
+                    }),
+                    Markup.button({
+                        action: {
+                            type: 'text',
+                            payload: JSON.stringify({
+                                action: 'rouletteTop',
+                            }),
+                            label: "Топ"
+                        }
+                    }),
+                ], { columns: 2 })
+                .inline()
+            )
+        }
         // Выдать нужную фотографию из альбома группы
         async function getPictureFromAlbum(ctx, text, albumID = 275086127) {
             try {
@@ -460,11 +504,17 @@ async function start() {
             ctx.reply(insructionTitle + '\n' + insructionLink)
         })
         //==========================================================================================
-        // Выдать меню для игры в 21
+        // Игра "21"
         bot.command(/^!21$/, async (ctx) => {
             const spam = await antiSpam(ctx, 5);
             if (spam) return;
             showButtons21(ctx.message.peer_id)
+        })
+        // Игра "Русская рулетка"
+        bot.command(/^!rr/, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            showButtonsRoulette(ctx.message.peer_id)
         })
         //==========================================================================================
         // Убрать у бота кнопки
@@ -522,22 +572,22 @@ async function start() {
             const dropUser = ctx.message.text.match(/@[\w-]+/ig)[0].slice(1);
             // Причина репорта/респекта
             let reason = ctx.message.text.split(' ').filter((_, i) => i !== 0 && i !== 1).join(' ');
-            sayStateForUser(ctx, reason, dropUser);
+            sendStateUser(ctx, reason, dropUser);
         });
         bot.command(/!(report|respect|res|rep)\s\[[\w]+\W@[\w-]+\]/i, async (ctx) => {
             // Пользователя которого ввели
             const dropUser = ctx.message.text.match(/@[\w-]+/ig)[0].slice(1);
-            sayStateForUser(ctx, null, dropUser);
+            sendStateUser(ctx, null, dropUser);
         });
         bot.command(/!(report|respect|res|rep)\s[a-zа-я0-9\W]+/i, async (ctx) => {
             let dropUserID = ctx.message.fwd_messages[0];
             // Причина репорта/респекта
             let reason = ctx.message.text.split(' ').filter((_, i) => i !== 0).join(' ');
-            sayStateForUser(ctx, reason, null, dropUserID);
+            sendStateUser(ctx, reason, null, dropUserID);
         });
         bot.command(/!(report|respect|res|rep)/i, async (ctx) => {
             let dropUserID = ctx.message.fwd_messages[0];
-            sayStateForUser(ctx, null, null, dropUserID);
+            sendStateUser(ctx, null, null, dropUserID);
         });
         //==========================================================================================
         // Рандомное видео из группы VK
@@ -873,6 +923,7 @@ async function start() {
             }
             checkAdmin(ctx, updateGame21.bind(null, ctx))
         })
+        // secret command
         bot.command((/^!21 clrg$/), (ctx) => {
             function clearGame21() {
                 fs.writeFileSync('./cards21.json', JSON.stringify([], null, 2));
@@ -880,7 +931,7 @@ async function start() {
             checkAdmin(ctx, clearGame21.bind(null, ctx))
         })
         //==========================================================================================
-        // 21 - card game (action buttons)
+        // Action Buttons
         bot.event('message_new', async (ctx) => {
             if (ctx.message.payload) {
                 function compare(a, b) {
@@ -934,10 +985,168 @@ async function start() {
                     await fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2))
                 }
 
+                async function startRouletteGame(roll, callback = null) {
+                    try {
+                        function getBullet(players) {
+                            if (players < 3) return getRandomInt(1, 4);
+                            if (players === 3) return getRandomInt(1, 5);
+                            if (players > 3) return getRandomInt(1, 7);
+                        }
+                        const spam = await antiSpam(ctx, 3);
+                        if (spam) return;
+                        const user = await getUser(userID);
+                        const existRoom = await room.findOne({room: conversationID});
+                        if (!existRoom) return ctx.reply(`🔫 ${user.first_name}, ты не взял револьвер!`);
+                        const players = existRoom.roulette.players;
+                        const existPlayer = players.filter(el => el.user == userID)[0];
+                        if (!existPlayer) return ctx.reply(`🔫 ${user.first_name}, ты не взял револьвер!`);
+                        if (players.length < 2) return ctx.reply(`🔫 Подожди хотя бы еще одного игрока, ему надо взять револьвер!`);
+                        if (!existRoom.gameStarted) {
+                            await room.updateOne({room: conversationID}, {
+                                $set: {
+                                    'roulette.gameStarted': true
+                                }
+                            });
+                        }
+                        if (!existPlayer.bullet > 0 || roll) {
+                            await room.updateOne({room: conversationID, 'roulette.players.user': userID}, {
+                                $set: {
+                                    'roulette.players.$.bullet': getBullet(players.length)
+                                }
+                            })
+                        }
+
+                        if (callback !== null) {
+                            callback(getBullet(players.length))
+                        }
+                        
+                    } catch(err) {
+                        console.error(err);
+                        ctx.reply('☢ Блин блинский, сбой какой-то, где-то создатель напортачил(')
+                    }
+                }   
                 const payload = JSON.parse(ctx.message.payload)
                 const conversationID = ctx.message.peer_id;
                 const userID = ctx.message.from_id;
+                // Русская рулетка ------------------------------------------------------------------
+                if (payload.action === 'takeRoulette') {
+                    try {
+                        let existRoom = await room.findOne({room: conversationID});
+                        if (!existRoom) {
+                            await room.create({
+                                room: conversationID,
+                            })
+                            existRoom = await room.findOne({room: conversationID});
+                        }
+                        const players = existRoom.roulette.players;
+                        const gameStarted = existRoom.roulette.gameStarted;
+                        const existPlayer = players.filter(el => el.user == userID)[0];
+                        if (!existPlayer && gameStarted) return ctx.reply('🔫 Игроки играют, подожди...')
+                        const user = await getUser(userID);
+                        if (!existPlayer) {
+                            room.updateOne({room: conversationID}, {
+                                $push: {
+                                    'roulette.players': {
+                                        user: userID,
+                                        bullet: 0,
+                                        shot: false,
+                                    }
+                                }
+                            }).then(() => {
+                                ctx.reply(`🔫 ${user.first_name} вступил в игру! \n (онлайн — ${++players.length} чел.)`)
+                            })
+                        } else {
+                            ctx.reply(`🔫 ${user.first_name}, ты уже взял револьвер!`);
+                        }
+                        
+                    } catch(err) {
+                        console.error(err);
+                        ctx.reply('☢ Блин блинский, сбой какой-то, где-то создатель напортачил(')
+                    }
+                }
+                if (payload.action === 'rouletteRoll') {
+                    startRouletteGame(true);
+                }
+                if (payload.action === 'rouletteShoot') {
+                    startRouletteGame(false, async (bullet) => {
+                        try {
+                            const genUser = await getUser(userID, 'gen');
+                            const user = await getUser(userID);
+                            let currentRoom = await room.findOne({room: conversationID})
+                            let currentBullet = currentRoom.roulette.bullet || 0;                            
+                            if (currentBullet === 0) {
+                                await room.updateOne({room: conversationID}, {
+                                    $set: {
+                                        'roulette.bullet': bullet
+                                    }
+                                })
+                            }
+                            currentRoom = await room.findOne({room: conversationID})
+                            currentBullet = currentRoom.roulette.bullet;
+                            const players = currentRoom.roulette.players;
+                            const currentPlayer = players.filter(el => el.user == userID)[0];
+                            
+                            if (currentPlayer.shot) return ctx.reply(`🔫 ${user.first_name}, подождите других, не все успели стрельнуть!`)    
+                            
+                            await room.updateOne({room: conversationID, 'roulette.players.user': userID}, {
+                                $set: {
+                                    'roulette.players.$.shot': true
+                                },                       
+                            })
 
+                            currentRoom = await room.findOne({room: conversationID})
+                            const notShotPlayers = currentRoom.roulette.players.filter(el => !el.shot);
+
+                            if (currentPlayer.bullet !== currentBullet) {
+                                ctx.reply(`🔫 ${genUser.first_name} пронесло...`);
+                                if (notShotPlayers.length === 0) {
+                                    await room.updateOne({room: conversationID}, {
+                                        $set: {
+                                            'roulette.bullet': 0
+                                        }
+                                    })
+                                    currentRoom.roulette.players.forEach(async player => {
+                                        await room.updateOne({room: conversationID, 'roulette.players.user': player.user}, {
+                                            $set: {
+                                                'roulette.players.$.shot': false
+                                            }
+                                        })
+                                    })
+                                    ctx.reply(`🤵 Вам везёт, стреляйте еще раз!`);
+                                }
+                            } else {
+                                const arPlayersExceptCurrent = currentRoom.roulette.players.filter(el => el.user != userID);
+                                await room.updateOne({room: conversationID}, {
+                                    $set: {
+                                        'roulette.players': arPlayersExceptCurrent
+                                    }
+                                })
+                                currentRoom = await room.findOne({room: conversationID})
+                                ctx.reply(`🔫 ${user.first_name} умер... 😢😭`)
+                                if (currentRoom.roulette.players.length === 1) {
+                                    const winner = currentRoom.roulette.players[0];
+                                    await room.updateOne({room: conversationID}, {
+                                        $set: {
+                                            'roulette': {}
+                                        }
+                                    })
+                                    const user = await getUser(+winner.user);
+                                    ctx.reply(`🏅 ${user.first_name} ${user.last_name} выходит из комнаты живым`)
+                                }
+                            }
+                            
+                        } catch(err) {
+                            console.error(err);
+                            ctx.reply('☢ Блин блинский, сбой какой-то, где-то создатель напортачил(')
+                        }
+                    });
+                }
+                if (payload.action === 'rouletteTop') {
+                    const spam = await antiSpam(ctx, 5);
+                    if (spam) return;
+                    ctx.reply('в разработке...')
+                }
+                // 21 --------------------------------------------------------------------------------
                 if (payload.action === 'takeCards') {
                     try {
                         const rooms = JSON.parse(fs.readFileSync('./cards21.json', 'utf-8'));
