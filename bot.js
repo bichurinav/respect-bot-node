@@ -15,7 +15,7 @@ const config = require('config');
 const fs = require('fs');
 const { findOne } = require('./schema/room');
 
-const token = config.get('token_dev');
+const token = config.get('token');
 const dbURL = config.get('database');
 const bot = new VK(token);
 bot.use(session.middleware());
