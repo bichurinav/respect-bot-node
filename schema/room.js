@@ -24,6 +24,12 @@ const roomSchema = new Schema({
                 bullet: Number,
                 shot: Boolean
             }
+        ],
+        top: [
+            {
+                user: String,
+                score: Number
+            }
         ]
     },
 });

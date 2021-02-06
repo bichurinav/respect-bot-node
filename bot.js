@@ -13,12 +13,13 @@ const iconv = require('iconv-lite');
 const axios = require('axios');
 const config = require('config');
 const fs = require('fs');
+const { findOne } = require('./schema/room');
 
-const token = config.get('token');
+const token = config.get('token_dev');
 const dbURL = config.get('database');
 const bot = new VK(token);
 bot.use(session.middleware());
-
+//\[[\w]+\W@[\w-]+\]
 const arCards21 = [
     {name: '6', score: 6}, {name: '7', score: 7}, {name: '8', score: 8},
     {name: '9', score: 9}, {name: '10', score: 10}, {name: 'J', score: 2},
@@ -363,6 +364,9 @@ async function start() {
                 // Выводим пост
                 sendPost(ctx.message.peer_id);
             } catch (err) {
+                if (err.response.error_code === 29) {
+                    return ctx.reply('📈 Превышен лимит, через сутки лимит возобнавится \n [Причина: ВК дает 5000 запросов в сутки]')
+                }
                 ctx.reply('☢ Блин блинский, не могу выдать, сбой какой-то(')
                 console.error(err);
             }
@@ -422,7 +426,7 @@ async function start() {
         }
         // Получить меню для игры в "Русскую рулетку"
         function showButtonsRoulette(conversationID) {
-            bot.sendMessage(conversationID, '🎴 Русская рулетка (beta version)', null, Markup
+            bot.sendMessage(conversationID, 'Русская рулетка ( ͝ಠ ʖ ಠ)=ε/̵͇̿̿/’̿’̿ ̿ ', null, Markup
                 .keyboard([
                     Markup.button({
                         action: {
@@ -431,7 +435,7 @@ async function start() {
                                 action: 'takeRoulette',
                             }),
                             label: "Взять револьвер"
-                        }
+                        },
                     }),
                     Markup.button({
                         action: {
@@ -440,7 +444,7 @@ async function start() {
                                 action: 'rouletteRoll',
                             }),
                             label: "Крутить барабан"
-                        }
+                        },
                     }),
                     Markup.button({
                         action: {
@@ -449,7 +453,7 @@ async function start() {
                                 action: 'rouletteShoot',
                             }),
                             label: "Стрельнуть"
-                        }
+                        },
                     }),
                     Markup.button({
                         action: {
@@ -458,9 +462,9 @@ async function start() {
                                 action: 'rouletteTop',
                             }),
                             label: "Топ"
-                        }
+                        },
                     }),
-                ], { columns: 2 })
+                ], { columns: 1 })
                 .inline()
             )
         }
@@ -503,18 +507,47 @@ async function start() {
             const insructionTitle = res[0].attachments[0].link.title;
             ctx.reply(insructionTitle + '\n' + insructionLink)
         })
-        //==========================================================================================
+        //===================
+        // МИНИ-ИГРЫ /(-+)\
+        //===================
         // Игра "21"
         bot.command(/^!21$/, async (ctx) => {
-            const spam = await antiSpam(ctx, 5);
+            const spam = await antiSpam(ctx, 2);
             if (spam) return;
             showButtons21(ctx.message.peer_id)
         })
         // Игра "Русская рулетка"
-        bot.command(/^!rr/, async (ctx) => {
-            const spam = await antiSpam(ctx, 5);
+        bot.command(/^!rr$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 2);
             if (spam) return;
             showButtonsRoulette(ctx.message.peer_id)
+        })
+        // Игра "Монетка"
+        bot.command(/^!(монетка|м)$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 3);
+            if (spam) return;
+            const user = await getUser(ctx.message.from_id, 'gen');
+            const side = getRandomInt(0, 2);
+            ctx.reply(`у ${user.first_name} ${side === 0 ? 'выпала Решка' : 'выпал Орёл'}`)
+        })
+        // Игра "ROLL"
+        bot.command(/^!(roll|ро(л|лл))$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 3);
+            if (spam) return;
+            const user = await getUser(ctx.message.from_id, 'gen');
+            const count = getRandomInt(0, 101);
+            ctx.reply(`у ${user.first_name}: ${count}`)
+        })
+        // Игра "Шар судьбы"
+        bot.command(/^!8\s[a-zа-я0-9\W]+$/, (ctx) => {
+            arAnswers = [
+                'Нет', 'Да', 'Определенно', 'Вероятно', 'Есть сомнения', 'Забудь об этом',
+                'Шансы хорошие', 'Преспективы не очень хорошие', 'Можешь быть уверен в этом',
+                'Не могу сказать', 'Возможно', 'Можешь быть уверен в этом', 'Духи говорят - да',
+                'Нет', 'Шансы плохие', 'Весьма сомнительно', 'Может быть', 'Никаких сомнений',
+                'Вероятнее всего', 'Скорее всего да', 'Скорее всего нет', 'Духи говорят - нет'
+            ]
+            return ctx.reply('🎱 ' + arAnswers[getRandomInt(0, arAnswers.length)]);
         })
         //==========================================================================================
         // Убрать у бота кнопки
@@ -591,7 +624,7 @@ async function start() {
         });
         //==========================================================================================
         // Рандомное видео из группы VK
-        bot.command(/(^!(video|видос)$|\[[\w]+\W@[\w-]+\]\sвидос|видос\s🎬)/i, async (ctx) => {
+        bot.command(/(video|видос)/i, async (ctx) => {
             const spam = await antiSpam(ctx, 5);
             if (spam) return;
             const arVideoGroups = [-30316056, -167127847]; // Список групп (id)
@@ -939,7 +972,7 @@ async function start() {
                     if (a.score === b.score) return 0;
                     if (a.score < b.score) return 1;
                 }
-                async function endGame(room, arDelRoom) {
+                async function endGame21(room, arDelRoom) {
                     room.start = false;
                     room.online = 0;
                     let arTopPlayers = room.players.sort(compare)
@@ -984,7 +1017,6 @@ async function start() {
                     await bot.sendMessage(conversationID, `🥇 ${user.sex === 2 ? 'Выиграл' : 'Выиграла'} ${user.first_name} ${user.last_name}`)
                     await fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2))
                 }
-
                 async function startRouletteGame(roll, callback = null) {
                     try {
                         function getBullet(players) {
@@ -992,7 +1024,7 @@ async function start() {
                             if (players === 3) return getRandomInt(1, 5);
                             if (players > 3) return getRandomInt(1, 7);
                         }
-                        const spam = await antiSpam(ctx, 3);
+                        const spam = await antiSpam(ctx, 2);
                         if (spam) return;
                         const user = await getUser(userID);
                         const existRoom = await room.findOne({room: conversationID});
@@ -1031,6 +1063,11 @@ async function start() {
                 // Русская рулетка ------------------------------------------------------------------
                 if (payload.action === 'takeRoulette') {
                     try {
+                        const {profiles} = await bot.execute('messages.getConversationMembers', {
+                            peer_id: ctx.message.peer_id,
+                        })
+                        if (profiles.length === 1) return ctx.reply('☢ Игра доступна только для бесед!')
+
                         let existRoom = await room.findOne({room: conversationID});
                         if (!existRoom) {
                             await room.create({
@@ -1058,9 +1095,10 @@ async function start() {
                         } else {
                             ctx.reply(`🔫 ${user.first_name}, ты уже взял револьвер!`);
                         }
-                        
                     } catch(err) {
-                        console.error(err);
+                        if (err.response.error_code === 917) {
+                            return ctx.reply('☢ Для игры, боту требуется админка!')
+                        }
                         ctx.reply('☢ Блин блинский, сбой какой-то, где-то создатель напортачил(')
                     }
                 }
@@ -1124,7 +1162,7 @@ async function start() {
                                 currentRoom = await room.findOne({room: conversationID})
                                 const notShotPlayers = currentRoom.roulette.players.filter(el => !el.shot);
                                 
-                                ctx.reply(`☠⚰ ${user.first_name} умер... 😢😭`);
+                                ctx.reply(`${user.first_name} умер... ⚰ 😢😭`);
 
                                 if (notShotPlayers.length === 0) {
                                     await room.updateOne({room: conversationID}, {
@@ -1144,9 +1182,39 @@ async function start() {
                                     const winner = currentRoom.roulette.players[0];
                                     await room.updateOne({room: conversationID}, {
                                         $set: {
-                                            'roulette': {}
+                                            'roulette': {
+                                                gameStarted: false,
+                                                bullet: 0,
+                                                players: [],
+                                                top: [...currentRoom.roulette.top]
+                                            }
                                         }
                                     })
+                                    currentRoom = await room.findOne({room: conversationID});
+                                    async function createTopList() {
+                                        await room.updateOne({room: conversationID}, {
+                                            $push: {
+                                                'roulette.top': {
+                                                    user: winner.user,
+                                                    score: 1,
+                                                }
+                                            }
+                                        })
+                                    }
+                                    if (currentRoom.roulette.top.length > 0) {
+                                        const existPlayerInTop = currentRoom.roulette.top.filter((player) => player.user === winner.user)[0]
+                                        if (existPlayerInTop) {
+                                            await room.updateOne({room: conversationID, 'roulette.top.user': winner.user}, {
+                                                $set: {
+                                                    'roulette.top.$.score': existPlayerInTop.score + 1
+                                                }
+                                            })
+                                        } else {
+                                            await createTopList()
+                                        }
+                                    } else {
+                                        await createTopList()
+                                    }                                  
                                     const user = await getUser(+winner.user);
                                     ctx.reply(`🏅 ${user.first_name} ${user.last_name} выходит из комнаты живым`)
                                 }
@@ -1159,9 +1227,26 @@ async function start() {
                     });
                 }
                 if (payload.action === 'rouletteTop') {
-                    const spam = await antiSpam(ctx, 5);
+                    const spam = await antiSpam(ctx, 3);
                     if (spam) return;
-                    ctx.reply('в разработке...')
+                    const currentRoom = await room.findOne({room: conversationID});
+                    if (!currentRoom) return ctx.reply('📜 Список пуст...');
+                    const list = currentRoom.roulette.top;
+                    if (list.length < 1) return ctx.reply('📜 Список пуст...');
+                    const arTopPlayers = list.sort(compare);
+                    let topList = [];
+                    for (let player of arTopPlayers) {
+                        const user = await getUser(+player.user)
+                        topList.push({
+                            first_name: user.first_name,
+                            last_name: user.last_name,
+                            score: player.score
+                        })
+                    }
+                    const formatedTopList = topList.map((player, idx) => {
+                        return `${idx + 1}. ${player.first_name} ${player.last_name} - ${player.score}\n`
+                    })
+                    ctx.reply(`📜 Топ 🔫 русской рулетки\n${formatedTopList.join('')}`);
                 }
                 // 21 --------------------------------------------------------------------------------
                 if (payload.action === 'takeCards') {
@@ -1306,7 +1391,7 @@ async function start() {
                             await bot.sendMessage(conversationID, `🃏 ${user.first_name} — лох, перебор ${scorePlayer}`);
 
                             if (neededRoom.online < 1) {
-                                return await endGame(neededRoom, arDelRoom)
+                                return await endGame21(neededRoom, arDelRoom)
                             }
 
                             fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2));
@@ -1388,14 +1473,14 @@ async function start() {
                         } else if (existPlayer.score === 21) {
                             const user = await getUser(userID, 'gen');
                             await bot.sendMessage(conversationID, `🃏 у ${user.first_name} ${cards}, ${user.sex === 2 ? 'набрал' : 'набрала'} — ${existPlayer.score}`)
-                            return await endGame(neededRoom, arDelRoom);
+                            return await endGame21(neededRoom, arDelRoom);
                         } else {
                             neededRoom.start = true;
                             neededRoom.online -= 1;
                             const user = await getUser(userID, 'gen');
                             await bot.sendMessage(conversationID, `🃏 у ${user.first_name} ${cards}, ${user.sex === 2 ? 'набрал' : 'набрала'} — ${existPlayer.score}`)
                             if (neededRoom.online < 1) {
-                                await endGame(neededRoom, arDelRoom);
+                                await endGame21(neededRoom, arDelRoom);
                             } else {
                                 fs.writeFileSync('./cards21.json', JSON.stringify([neededRoom, ...arDelRoom], null, 2))
                             }
