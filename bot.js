@@ -1098,7 +1098,7 @@ async function start() {
                             const notShotPlayers = currentRoom.roulette.players.filter(el => !el.shot);
 
                             if (currentPlayer.bullet !== currentBullet) {
-                                ctx.reply(`🔫 ${genUser.first_name} пронесло...`);
+                                ctx.reply(`🎰 ${genUser.first_name} пронесло...`);
                                 if (notShotPlayers.length === 0) {
                                     await room.updateOne({room: conversationID}, {
                                         $set: {
@@ -1122,7 +1122,24 @@ async function start() {
                                     }
                                 })
                                 currentRoom = await room.findOne({room: conversationID})
-                                ctx.reply(`🔫 ${user.first_name} умер... 😢😭`)
+                                const notShotPlayers = currentRoom.roulette.players.filter(el => !el.shot);
+                                
+                                ctx.reply(`☠⚰ ${user.first_name} умер... 😢😭`);
+
+                                if (notShotPlayers.length === 0) {
+                                    await room.updateOne({room: conversationID}, {
+                                        $set: {
+                                            'roulette.bullet': 0
+                                        }
+                                    })
+                                    currentRoom.roulette.players.forEach(async player => {
+                                        await room.updateOne({room: conversationID, 'roulette.players.user': player.user}, {
+                                            $set: {
+                                                'roulette.players.$.shot': false
+                                            }
+                                        })
+                                    })
+                                }
                                 if (currentRoom.roulette.players.length === 1) {
                                     const winner = currentRoom.roulette.players[0];
                                     await room.updateOne({room: conversationID}, {
