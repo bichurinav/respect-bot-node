@@ -13,7 +13,6 @@ const iconv = require('iconv-lite');
 const axios = require('axios');
 const config = require('config');
 const fs = require('fs');
-const { findOne } = require('./schema/room');
 
 const token = config.get('token');
 const dbURL = config.get('database');
@@ -29,7 +28,7 @@ const arCards21 = [
 async function start() {
     try {
         // Подключение к базе данных
-        await mongoose.connect(dbURL, {useNewUrlParser: true, useUnifiedTopology: true, useFindAndModify: false });
+        await mongoose.connect(dbURL, {useNewUrlParser: true, useUnifiedTopology: true });
         // Получаем нужного пользователя
         async function getNeededUser(ctx, user, conversationID, userID) {
             try {
@@ -42,7 +41,7 @@ async function start() {
                     if (userID) return new RegExp(userID, 'i').test(profile.id);
                     return new RegExp(user, 'i').test(profile.screen_name);
                 })[0];
-            } catch (e) {
+            } catch(err) {
                 ctx.reply('☢ Для выполнения этой команды, боту нужна админка!');
             }
         }
@@ -51,7 +50,7 @@ async function start() {
             try {
                 const arRooms = await room.find({})
                 return arRooms.filter(el => el.room === conversationID)[0]
-            } catch (err) {
+            } catch(err) {
                 console.error(err)
             }
         }
@@ -75,7 +74,6 @@ async function start() {
                 return user[0]
             } catch(err) {
                 console.error(err);
-                console.log('☢ Блин блинский, сбой какой-то, где-то создатель напортачил(');
             }
         }
         // Получает мин. сек. мс.
@@ -297,8 +295,7 @@ async function start() {
                     if (res.profiles.length === 1) return callback()
                     ctx.reply('&#9762; Доступ запрещен, вы не администратор!');
                 }
-            } catch (e) {
-                console.error(e);
+            } catch(err) {
                 ctx.reply('☢ Для выполнения этой команды, боту нужна админка!');
             }
         }
@@ -363,11 +360,12 @@ async function start() {
                 if (!post) return bot.sendMessage(ctx.message.peer_id, `☢ Блин блинский, давай еще раз(`);
                 // Выводим пост
                 sendPost(ctx.message.peer_id);
-            } catch (err) {
+            } catch(err) {
                 if (err.response.error_code === 29) {
-                    return ctx.reply('📈 Превышен лимит, через сутки лимит возобнавится \n [Причина: ВК дает 5000 запросов в сутки]')
+                    ctx.reply('📈 Превышен лимит, через сутки лимит возобнавится \n [ВК дает 5000 запросов в сутки]')
+                } else {
+                    ctx.reply('☢ Блин блинский, не могу выдать [giveRandomPost]')
                 }
-                ctx.reply('☢ Блин блинский, не могу выдать, сбой какой-то(')
                 console.error(err);
             }
         }
@@ -480,8 +478,9 @@ async function start() {
                 const picture = pictures.filter(el => el.text === text)[0]
                 return `photo${picture.owner_id}_${picture.id}`
 
-            } catch (err) {
+            } catch(err) {
                 console.error(err);
+                ctx.reply('☢ Блин блинский, не могу выдать [getPictureFromAlbum]')
             }
         }
         // Выдать пользователю картинку - кем он является
@@ -494,7 +493,7 @@ async function start() {
                 ctx.reply(`${user.first_name}, ты ${randomItem}`, picture);
             } catch(err) {
                 console.error(err)
-                return ctx.reply('☢ Блин блинский, не могу выдать, где-то создатель напортачил(')
+                ctx.reply('☢ Блин блинский, не могу выдать [sendUserWhoHe]')
             }
         }
         //==========================================================================================
@@ -640,9 +639,9 @@ async function start() {
                 const videoPosts = await getFilterPosts(randomGroupVideo, 20, 0, 'video');
                 const video = videoPosts[0].attachments[0].video;
                 bot.sendMessage(ctx.message.peer_id, '', `video${video.owner_id}_${video.id}`);
-            } catch (err) {
+            } catch(err) {
                 console.error(err);
-                ctx.reply('&#9762; Блин блинский, не могу выдать, сбой какой-то(')
+                ctx.reply('&#9762; Блин блинский, не могу выдать [video_last]')
             }
         })
         //==========================================================================================
@@ -667,9 +666,9 @@ async function start() {
                             responseEncoding: 'binary'
                         })
                         .then(response => iconv.decode(Buffer.from(response.data), 'windows-1251'))
-                } catch (err) {
-                    ctx.reply('&#9762; Блин блинский, не могу выдать, сбой какой-то(')
+                } catch(err) {
                     console.error(err)
+                    ctx.reply('&#9762; Блин блинский, не могу выдать [anec_old]')
                 }
             }
             getAnecdote(ctx).then(data => {
@@ -825,7 +824,7 @@ async function start() {
                 const randomPerson = conversation.profiles[getRandomInt(0, conversation.profiles.length)];
                 const randomGachi = arGachi[getRandomInt(0, arGachi.length - 1)];
                 ctx.reply(`@${randomPerson.screen_name}(${randomPerson.last_name}) ${randomGachi}`);
-            } catch (e) {
+            } catch(err) {
                 ctx.reply('&#9762; Для работы бота нужна админка!');
             }
         });
@@ -886,7 +885,7 @@ async function start() {
                     }
                 })
                 ctx.reply(`Топ челов по ${state === 'respect' ? 'респектам &#129305;' : 'репортам &#128078;'}\n${topList.join('')}`);
-            } catch (err) {
+            } catch(err) {
                 ctx.reply('&#128203; Список пуст,' +
                     ' кидайте респекты/репорты участникам беседы')
             }
@@ -911,9 +910,9 @@ async function start() {
                     const newRooms = [neededRoom, ...arDelRoom];
                     await bot.sendMessage(conversationID, '📜 Топ в игре 🎯 21 успешно очищен!');
                     fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2))
-                } catch (err) {
-                    console.log(err)
-                    return ctx.reply('&#9762; Блин блинский, сбой какой-то, где-то создатель напортачил(')
+                } catch(err) {
+                    console.error(err)
+                    ctx.reply('&#9762; Блин блинский, сбой какой-то [game 21]')
                 }
             }
             checkAdmin(ctx, clearTop21.bind(null, ctx))
@@ -949,9 +948,9 @@ async function start() {
                             .inline()
                     )
                     fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2))
-                } catch (err) {
-                    console.log(err)
-                    return ctx.reply('&#9762; Блин блинский, сбой какой-то, где-то создатель напортачил(')
+                } catch(err) {
+                    console.error(err)
+                    ctx.reply('&#9762; Блин блинский, сбой какой-то [update_21]')
                 }
             }
             checkAdmin(ctx, updateGame21.bind(null, ctx))
@@ -1054,7 +1053,7 @@ async function start() {
                         
                     } catch(err) {
                         console.error(err);
-                        ctx.reply('☢ Блин блинский, сбой какой-то, где-то создатель напортачил(')
+                        ctx.reply('☢ Блин блинский, сбой какой-то [startRouletteGame]')
                     }
                 }   
                 const payload = JSON.parse(ctx.message.payload)
@@ -1099,7 +1098,7 @@ async function start() {
                         if (err.response.error_code === 917) {
                             return ctx.reply('☢ Для игры, боту требуется админка!')
                         }
-                        ctx.reply('☢ Блин блинский, сбой какой-то, где-то создатель напортачил(')
+                        ctx.reply('☢ Блин блинский, сбой какой-то [takeRoulette]')
                     }
                 }
                 if (payload.action === 'rouletteRoll') {
@@ -1222,7 +1221,7 @@ async function start() {
                             
                         } catch(err) {
                             console.error(err);
-                            ctx.reply('☢ Блин блинский, сбой какой-то, где-то создатель напортачил(')
+                            ctx.reply('☢ Блин блинский, сбой какой-то [rouletteShoot]')
                         }
                     });
                 }
@@ -1311,7 +1310,7 @@ async function start() {
                             fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2))
                         }
                     } catch(err) {
-                        console.log(err)
+                        console.error(err)
                         bot.sendMessage(conversationID, `🃏 Напиши боту в лс (что угодно), и тогда сможешь брать карты`,
                             null,  Markup
                                 .keyboard([
@@ -1400,9 +1399,9 @@ async function start() {
                             let newRooms = [neededRoom, ...arDelRoom];
                             fs.writeFileSync('./cards21.json', JSON.stringify(newRooms, null, 2));
                         }
-                    } catch (err) {
+                    } catch(err) {
                         console.error(err)
-                        ctx.reply('&#9762; Блин блинский, сбой какой-то, где-то создатель напортачил(')
+                        ctx.reply('&#9762; Блин блинский, сбой какой-то [takeCard]')
                     }
                 }
                 if (payload.action === 'giveTop') {
@@ -1485,9 +1484,9 @@ async function start() {
                                 fs.writeFileSync('./cards21.json', JSON.stringify([neededRoom, ...arDelRoom], null, 2))
                             }
                         }
-                    } catch (err) {
+                    } catch(err) {
                         console.error(err)
-                        ctx.reply('&#9762; Блин блинский, сбой какой-то, где-то создатель напортачил(')
+                        ctx.reply('&#9762; Блин блинский, сбой какой-то [showCards]')
                     }
                 }
                 if (payload.action === 'giveRule') {
@@ -1504,7 +1503,7 @@ async function start() {
         })
         //==========================================================================================
         bot.startPolling();
-    } catch (err) {
+    } catch(err) {
         console.error(err);
     }
 }
