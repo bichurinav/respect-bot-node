@@ -844,7 +844,9 @@ async function start() {
             const spam = await antiSpam(ctx, 5);
             if (spam) return;
             const picture = await getPictureFromAlbum(ctx, 'ляпин');
-            ctx.reply('С Днем Рождения! 🤘🏻🥳🤘🏻', picture)
+            ctx.reply('', picture).then(() => {
+                bot.sendMessage(ctx.message.peer_id, 'С Днем Рождения! 🤘🏻🥳🤘🏻')
+            })
         })
         //==========================================================================================
         // Случайный Gachimuchi
