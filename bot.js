@@ -816,7 +816,7 @@ async function start() {
             const picture = await getPictureFromAlbum(ctx, 'повезло');
             ctx.reply('', picture)
         })
-        bot.command(/^(не|не\s)повезло|(не|не\s)повезло\s(не|не\s)повезло$/i, async (ctx) => {
+        bot.command(/^не(\s)повезло|не(\s)повезло\sне(\s)повезло$/i, async (ctx) => {
             const spam = await antiSpam(ctx, 5);
             if (spam) return;
             const picture = await getPictureFromAlbum(ctx, 'не повезло');
