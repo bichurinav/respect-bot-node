@@ -646,6 +646,12 @@ async function start() {
         })
         //==========================================================================================
         // Случайный мем из группы VK
+        bot.command(/^!быдломем$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 3);
+            if (spam) return;
+            const arMemGroups = [-45745333, -162541031, -23246051]; // Список групп (id)
+            giveRandomPost(ctx, arMemGroups, 'photo');
+        })
         bot.command(/(me(m|es)|ме(м|мес|мчик|мас))/i, async (ctx) => {
             const spam = await antiSpam(ctx, 5);
             if (spam) return;
