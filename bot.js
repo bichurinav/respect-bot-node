@@ -840,6 +840,12 @@ async function start() {
             const picture = await getPictureFromAlbum(ctx, 'тяжело');
             ctx.reply('', picture)
         })
+        bot.command(/^!ляпин$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'ляпин');
+            ctx.reply('С Днем Рождения! 🤘🏻🥳🤘🏻', picture)
+        })
         //==========================================================================================
         // Случайный Gachimuchi
         bot.command(/(гачи|gachi)/i, async (ctx) => {
