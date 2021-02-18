@@ -810,6 +810,30 @@ async function start() {
             const picture = await getPictureFromAlbum(ctx, 'горин');
             ctx.reply('', picture)
         })
+        bot.command(/^(повезло\sповезло)|повезло$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'повезло');
+            ctx.reply('', picture)
+        })
+        bot.command(/^(не|не\s)повезло|(не|не\s)повезло\s(не|не\s)повезло$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'не повезло');
+            ctx.reply('', picture)
+        })
+        bot.command(/^правила$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'правила');
+            ctx.reply('', picture)
+        })
+        bot.command(/^отец|тяжело$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'тяжело');
+            ctx.reply('', picture)
+        })
         //==========================================================================================
         // Случайный Gachimuchi
         bot.command(/(гачи|gachi)/i, async (ctx) => {
