@@ -143,7 +143,10 @@ async function start() {
 
             if (dropUserID !== undefined && dropUser === null) {
                 if (dropUserID) {
-                    if (dropUserID.from_id < 0) return ctx.reply(`Cебе кинь &#128545;`);
+                    if (dropUserID.from_id < 0) {
+                        if (state === 'rep') return ctx.reply(`Cебе кинь &#128545;`);  
+                        if (state === 'res') return ctx.reply(`Пасибо, за это можешь себя похвалить ☺`);  
+                    }
                     neededUser = await getNeededUser(ctx,null, roomID, dropUserID.from_id);
                 } else {
                     return ctx.reply(`&#9762; Перешлите сообщение, или \n !${state} @id <можно указать причину>`);
@@ -194,6 +197,8 @@ async function start() {
                 if (sender[0].last_name === neededUser.last_name) {
                     if (state === 'report')
                         return ctx.reply(`@${neededUser.screen_name}(${neededUser.last_name}), ну ты и &#129313;`);
+                    if (ctx.message.from_id === 292556963) 
+                        return ctx.reply(`@${neededUser.screen_name}(${neededUser.last_name}), хорош, всегда свеж, тлеет шмаль, летит кэш, и он в дерьмо каждый день, целый день...`);
                     state = 'report';
                     reason = 'любопытный';
                     ctx.session.reportFlag = true;
