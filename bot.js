@@ -198,7 +198,7 @@ async function start() {
                     if (state === 'report')
                         return ctx.reply(`@${neededUser.screen_name}(${neededUser.last_name}), ну ты и &#129313;`);
                     if (ctx.message.from_id === 292556963) 
-                        return ctx.reply(`@${neededUser.screen_name}(${neededUser.last_name}), хорош, всегда свеж, тлеет шмаль, летит кэш, и он в дерьмо каждый день, целый день...`);
+                        return ctx.reply(`@${neededUser.screen_name}(${neededUser.first_name}), хорош, всегда свеж, тлеет шмаль, летит кэш, и он в дерьмо каждый день, целый день...`);
                     state = 'report';
                     reason = 'любопытный';
                     ctx.session.reportFlag = true;
