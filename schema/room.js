@@ -12,7 +12,16 @@ const roomSchema = new Schema({
             respect: Number,
             report: Number,
             merit: Array,
-            fail: Array
+            fail: Array,
+            buff: {
+                beer: Boolean,
+                weed: Boolean
+            },
+            inventory: {
+                glove: Number,
+                beer: Number,
+                weed: Number
+            }
         }
     ],
     roulette: {

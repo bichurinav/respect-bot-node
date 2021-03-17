@@ -14,15 +14,30 @@ const axios = require('axios');
 const config = require('config');
 const fs = require('fs');
 
-const token = config.get('token');
+const token = config.get('token_dev');
 const dbURL = config.get('database');
 const bot = new VK(token);
 bot.use(session.middleware());
-//\[[\w]+\W@[\w-]+\]
+
 const arCards21 = [
     {name: '6', score: 6}, {name: '7', score: 7}, {name: '8', score: 8},
     {name: '9', score: 9}, {name: '10', score: 10}, {name: 'J', score: 2},
     {name: 'Q', score: 3}, {name: 'K', score: 4}, {name: 'A', score: 11}
+]
+
+const arItems = [
+    {name: 'glove', symbol: '🥊'},
+    {name: 'beer', symbol: '🍻'},
+    {name: 'weed', symbol: '🌿'}
+]
+
+const arLoot = [
+    [
+        arItems[0], arItems[1], arItems[2]
+    ],
+    [
+        arItems[0], arItems[1], arItems[2]
+    ],
 ]
 
 async function start() {
@@ -68,7 +83,7 @@ async function start() {
             try {
                 const user = await bot.execute('users.get', {
                     user_ids: userID,
-                    fields: 'sex',
+                    fields: 'sex,screen_name',
                     name_case: nameCase
                 })
                 return user[0]
@@ -127,10 +142,31 @@ async function start() {
                 return await check(res);
             }
         }
+        // Меняем статус пользователя
+        function getStatus(respect, report, user) {
+            if (respect / report > 2) {
+                if (user.sex === 1) return 'Респектабельная';
+                return 'Респектабельный'
+            }
+            if (respect / report >= 1) {
+                if (user.sex === 1) return 'Ровная';
+                return 'Ровный'
+            }
+            if (report > respect) {
+                if (user.sex === 1) return 'Вафелька';
+                return 'Вафля'
+            }
+        }
         // Кидает репорт/респект
         async function sendStateUser(ctx, reason, dropUser, dropUserID = null) {
             const spam = await antiSpam(ctx, 5);
             if (spam) return;
+            const conversation = await bot.execute('messages.getConversationMembers', {
+                peer_id: ctx.message.peer_id
+            })
+            if (conversation.profiles.length === 1) {
+                return ctx.reply('☢ Данная команда работает только в беседах!')
+            }
             let state = findState(ctx);
             // id беседы
             const roomID = ctx.message.peer_id;
@@ -147,7 +183,7 @@ async function start() {
                         if (state === 'rep') return ctx.reply(`Cебе кинь &#128545;`);  
                         if (state === 'res') return ctx.reply(`Пасибо, за это можешь себя похвалить ☺`);  
                     }
-                    neededUser = await getNeededUser(ctx,null, roomID, dropUserID.from_id);
+                    neededUser = await getNeededUser(ctx, null, roomID, dropUserID.from_id);
                 } else {
                     return ctx.reply(`&#9762; Перешлите сообщение, или \n !${state} @id <можно указать причину>`);
                 }
@@ -172,22 +208,6 @@ async function start() {
                 function sendMessage(state, sticker, mark) {
                     const flag = ctx.session.reportFlag;
                     return ctx.reply(`@${neededUser.screen_name}(${neededUser.last_name}) ${neededUser.sex === 2 ? 'получил' : 'получила'} ${state} ${sticker} (${mark}1)${flag ? `, причина: ${reason}` : ``}`)
-                }
-
-                // Меняем статус пользователя
-                function getStatus(respect, report) {
-                    if (respect / report > 2) {
-                        if (neededUser.sex === 1) return 'Респектабельная';
-                        return 'Респектабельный'
-                    }
-                    if (respect / report >= 1) {
-                        if (neededUser.sex === 1) return 'Ровная';
-                        return 'Ровный'
-                    }
-                    if (report > respect) {
-                        if (neededUser.sex === 1) return 'Вафелька';
-                        return 'Вафля'
-                    }
                 }
 
                 const hasRoom = await room.find({room: roomID});
@@ -245,10 +265,10 @@ async function start() {
                 } else {
                     // Пользователь есть в базе
                     const findState = await room.findOne({room: roomID, 'list.user': neededUser.screen_name});
-                    let report = findState.list.filter((profile) => profile.user === neededUser.screen_name)[0].report;
-                    let respect = findState.list.filter((profile) => profile.user === neededUser.screen_name)[0].respect;
-                    let merit = findState.list.filter((profile) => profile.user === neededUser.screen_name)[0].merit;
-                    let fail = findState.list.filter((profile) => profile.user === neededUser.screen_name)[0].fail;
+                    let report = findState.list.filter((profile) => profile.user === neededUser.screen_name)[0].report || 0;
+                    let respect = findState.list.filter((profile) => profile.user === neededUser.screen_name)[0].respect || 0;
+                    let merit = findState.list.filter((profile) => profile.user === neededUser.screen_name)[0].merit || [];
+                    let fail = findState.list.filter((profile) => profile.user === neededUser.screen_name)[0].fail || [];
                     if (state === 'respect') {
                         respect += 1;
                         let arMerit = [...merit];
@@ -258,7 +278,8 @@ async function start() {
                         room.updateOne({room: roomID, 'list.user': neededUser.screen_name}, {
                             $set: {
                                 'list.$.respect': respect,
-                                'list.$.status': getStatus(respect, report),
+                                'list.$.report': report,
+                                'list.$.status': getStatus(respect, report, neededUser),
                                 'list.$.merit': arMerit
                             }
                         }).then(() => {
@@ -273,7 +294,8 @@ async function start() {
                         room.updateOne({room: roomID, 'list.user': neededUser.screen_name}, {
                             $set: {
                                 'list.$.report': report,
-                                'list.$.status': getStatus(respect, report),
+                                'list.$.respect': respect,
+                                'list.$.status': getStatus(respect, report, neededUser),
                                 'list.$.fail': arFail
                             }
                         }).then(() => {
@@ -470,6 +492,48 @@ async function start() {
                 ], { columns: 1 })
                 .inline()
             )
+        }
+        // Выбрать предметы для использования
+        async function showButtonsLoot(conversationID, user) {
+            try {
+                bot.sendMessage(conversationID, 'select loot', null, Markup
+                    .keyboard([
+                        Markup.button({
+                            action: {
+                                type: 'text',
+                                payload: JSON.stringify({
+                                    action: 'throwGlove',
+                                    user
+                                }),
+                                label: "🥊"
+                            },
+                        }),
+                        Markup.button({
+                            action: {
+                                type: 'text',
+                                payload: JSON.stringify({
+                                    action: 'throwBeer',
+                                    user
+                                }),
+                                label: "🍻"
+                            },
+                        }),
+                        Markup.button({
+                            action: {
+                                type: 'text',
+                                payload: JSON.stringify({
+                                    action: 'throwWeed',
+                                    user
+                                }),
+                                label: "🌿"
+                            },
+                        }),
+                    ], { columns: 3})
+                    .inline()
+                )
+            } catch(err) {
+                console.error(err);
+            }
         }
         // Выдать нужную фотографию из альбома группы
         async function getPictureFromAlbum(ctx, text, albumID = 275086127) {
@@ -849,9 +913,7 @@ async function start() {
             const spam = await antiSpam(ctx, 5);
             if (spam) return;
             const picture = await getPictureFromAlbum(ctx, 'ляпин');
-            ctx.reply('', picture).then(() => {
-                bot.sendMessage(ctx.message.peer_id, 'С Днем Рождения! 🤘🏻🥳🤘🏻')
-            })
+            ctx.reply('', picture);
         })
         //==========================================================================================
         // Случайный Gachimuchi
@@ -872,10 +934,7 @@ async function start() {
             }
         });
         // Посмореть статистику пользователя по респеткам/репортам
-        bot.command(/^!(status|st)\s\[[\w]+\W@[\w-]+\]$/i, async (ctx) => {
-            const spam = await antiSpam(ctx, 5);
-            if (spam) return;
-            const user = ctx.message.text.match(/@[\w-]+/ig)[0].slice(1);
+        async function showStatus(ctx, user) {
             const neededUser = await getNeededUser(ctx, user, ctx.message.peer_id);
             if (neededUser) {
                 const roomID = ctx.message.peer_id;
@@ -887,8 +946,8 @@ async function start() {
                         return profile.user === neededUser.screen_name;
                     })[0];
                 }
-
-                if (!statusUser) return ctx.reply(`&#128203; О пользователе @${user} ничего не слышно...`);
+                
+                if (!statusUser.status) return ctx.reply(`&#128203; О пользователе @${user} ничего не слышно...`);
 
                 const merit = statusUser.merit.join(', ');
                 const fail = statusUser.fail.join(', ');
@@ -898,12 +957,36 @@ async function start() {
             } else {
                 ctx.reply(`Пользователя @${user} не существует, обратитесь к своему психотерапевту &#129301;`);
             }
+        }
+        bot.command(/^!(status|st)\s\[[\w]+\W@[\w-]+\]$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 3);
+            if (spam) return;
+            const conversation = await bot.execute('messages.getConversationMembers', {
+                peer_id: ctx.message.peer_id
+            })
+            if (conversation.profiles.length === 1) {
+                return ctx.reply('☢ Данная команда работает только в беседах!')
+            }
+            const user = ctx.message.text.match(/@[\w-]+/ig)[0].slice(1);
+            await showStatus(ctx, user)
         });
         bot.command(/^!(status|st)$/i, async (ctx) => {
-            const spam = await antiSpam(ctx, 5);
+            const spam = await antiSpam(ctx, 3);
             if (spam) return;
-            let state = ctx.message.text.match(/(status|st)/ig)[0];
-            ctx.reply(`!${state} @id`);
+            const conversation = await bot.execute('messages.getConversationMembers', {
+                peer_id: ctx.message.peer_id
+            })
+            if (conversation.profiles.length === 1) {
+                return ctx.reply('☢ Данная команда работает только в беседах!')
+            }
+            const dropUser = ctx.message.fwd_messages[0];
+            if (!dropUser) {
+                //let state = ctx.message.text.match(/(status|st)/ig)[0];
+                const user = await getUser(ctx.message.from_id);
+                return await showStatus(ctx, user.screen_name)
+            }
+            const user = await getUser(dropUser.from_id);
+            await showStatus(ctx, user.screen_name)
         });
         //==========================================================================================
         // Топ 10 участников по репортам/респектам
@@ -999,15 +1082,170 @@ async function start() {
             checkAdmin(ctx, updateGame21.bind(null, ctx))
         })
         // secret command
-        bot.command((/^!21 clrg$/), (ctx) => {
+        bot.command(/^!21 clrg$/, (ctx) => {
             function clearGame21() {
                 fs.writeFileSync('./cards21.json', JSON.stringify([], null, 2));
             }
             checkAdmin(ctx, clearGame21.bind(null, ctx))
         })
+        // LOOT INVENTORY
+        bot.command(/^!inv$/, async (ctx) => {
+            const roomID = ctx.message.peer_id;
+            const userID = ctx.message.from_id;
+            try {
+                const conversation = await bot.execute('messages.getConversationMembers', {
+                    peer_id: roomID
+                })
+                if (conversation.profiles.length === 1) {
+                    return ctx.reply('☢ Данная команда работает только в беседах!')
+                }
+                const user = await getUser(userID);
+                const neededRoom = await room.findOne({room: roomID, 'list.user': user.screen_name});
+                if (!neededRoom) return await bot.sendMessage(userID, '☢ У вас нету лута ;(');
+                const neededUser = neededRoom.list.filter(el => el.user === user.screen_name)[0];
+                if (typeof neededUser.inventory[arItems[0].name] !== 'number')
+                 return await bot.sendMessage(userID, '☢ У вас нету лута ;(');
+
+                const items = [...Object.keys(neededUser.inventory)]
+                items.splice(0, 1);
+                inventoryItems = items.map(el => {
+                    const symbol = arItems.filter(i => i.name === el)[0].symbol
+                    return `${symbol} ${el}: ${neededUser.inventory[el]} шт.\n`
+                }).join('')
+                const buffWeed = neededUser.buff.weed ? 'есть' : 'нету';
+                const buffBeer = neededUser.buff.beer ? 'есть' : 'нету';
+                // Отправить инвентарь в лс челу
+                await bot.sendMessage(userID, `${inventoryItems}\nБаф пива: ${buffBeer}\nБаф травы: ${buffWeed}\n(Респектов: ${neededUser.respect} | Репортов: ${neededUser.report})`);
+            } catch(err) {
+                console.error(err)
+                bot.sendMessage(roomID, `💼 Напишиту боту (что угодно), и бот сможет выдавать вам инвентарь!`,
+                    null,  Markup
+                        .keyboard([
+                            Markup.button({
+                                action: {
+                                    type: 'open_link',
+                                    link: 'https://vk.com/im?media=&sel=-201031864',
+                                    label: "Написать"
+                                }
+                            })
+                        ])
+                        .inline()
+                )
+            }
+                
+        })
+        // LOOT USE
+        bot.command(/^!use\s\[[\w]+\W@[\w-]+\]$/, async (ctx) => {
+            const dropUser = ctx.message.text.match(/@[\w-]+/ig)[0].slice(1);
+            try {
+                const conversation = await bot.execute('messages.getConversationMembers', {
+                    peer_id: ctx.message.peer_id,
+                })
+                if (conversation.profiles.length < 2) {
+                    return ctx.reply('☢ Данная команда работает только в беседах!')
+                }
+                showButtonsLoot(ctx.message.peer_id, dropUser);
+            } catch(err) {
+                console.error(err);
+            }
+        })
+        bot.command(/^!use$/, async (ctx) => {
+            const dropUser = ctx.message.fwd_messages[0];
+            try { 
+                const conversation = await bot.execute('messages.getConversationMembers', {
+                    peer_id: ctx.message.peer_id,
+                })
+                if (conversation.profiles.length < 2) {
+                    return ctx.reply('☢ Данная команда работает только в беседах!')
+                }
+                let user = {};
+                if (!dropUser) {
+                    user = await getUser(ctx.message.from_id);
+                } else {
+                    user = await getUser(dropUser.from_id)
+                }
+                showButtonsLoot(ctx.message.peer_id, user.screen_name);
+            } catch(e) {
+                console.error(e);
+            }
+        })
         //==========================================================================================
         // Action Buttons
         bot.event('message_new', async (ctx) => {
+            // GET LOOT
+            if (ctx.message.attachments.length) {
+                const attachemnt = ctx.message.attachments[0]
+                if (attachemnt.type === 'photo') {
+                    const conversation = await bot.execute('messages.getConversationMembers', {
+                        peer_id: ctx.message.peer_id,
+                    })
+                    //console.log(attachemnt.photo.id);
+                    if (conversation.profiles.length > 1) {
+                        let randomItem = arLoot[getRandomInt(0, arLoot.length)];
+                        if (randomItem !== null) {
+                            const user = await getUser(ctx.message.from_id);
+                            const roomID = ctx.message.peer_id;
+                            randomItem = randomItem[getRandomInt(0, randomItem.length)]
+                            let existRoom = await room.findOne({room: roomID});
+                            if (!existRoom) {
+                                await room.create({
+                                    room: roomID,
+                                    list: []
+                                })
+                                existRoom = await room.findOne({room: roomID});
+                            }
+                            const hasUser = existRoom.list.filter(el => el.user === user.screen_name)[0];
+                            if (hasUser) {
+                                const inventory = {
+                                    glove: hasUser.inventory.glove || 0,
+                                    beer: hasUser.inventory.beer || 0,
+                                    weed: hasUser.inventory.weed || 0
+                                }
+                                inventory[randomItem.name] += 1;
+                                if (typeof hasUser.buff.beer !== 'boolean') {
+                                    await room.updateOne({room: roomID, 'list.user': user.screen_name}, {
+                                        $set: {
+                                            'list.$.buff': {
+                                                weed: false,
+                                                beer: false
+                                            },
+                                        }
+                                    })
+                                }
+                                await room.updateOne({room: roomID, 'list.user': user.screen_name}, {
+                                    $set: {
+                                        'list.$.inventory': inventory,
+                                    }
+                                })
+                            } else {
+                                const inventory = {
+                                    glove: 0,
+                                    beer: 0,
+                                    weed: 0,
+                                }
+                                inventory[randomItem.name] = 1;
+                                await room.updateOne({room: roomID}, {
+                                    $push: {
+                                        list: {
+                                            user: user.screen_name,
+                                            firstName: user.first_name,
+                                            lastName: user.last_name,
+                                            respect: 0,
+                                            report: 0,
+                                            buff: {
+                                                weed: false,
+                                                beer: false
+                                            },
+                                            inventory
+                                        }
+                                    }
+                                })
+                            }
+                            ctx.reply(`🙊 ${user.first_name}, ${user.sex === 2 ? 'залутал' : 'залутала'} предмет (+1)`)
+                        }
+                    } 
+                }
+            }
             if (ctx.message.payload) {
                 function compare(a, b) {
                     if (a.score > b.score) return -1;
@@ -1102,6 +1340,493 @@ async function start() {
                 const payload = JSON.parse(ctx.message.payload)
                 const conversationID = ctx.message.peer_id;
                 const userID = ctx.message.from_id;
+                // LOOT ------------------------------------------------------------------
+                async function useLoot(item, symbol, callback, callbackSelf) {
+                    try {
+                        const existRoom = await room.findOne({room: conversationID});
+                        if (!existRoom) return ctx.reply('🗿 Беседа не активна, киньте респект/репорт или залутайте предмет');
+                        const sender = await getUser(userID);
+                        const existSender = existRoom.list.filter(el => el.user === sender.screen_name)[0];
+                        const existUser = existRoom.list.filter(el => el.user === payload.user)[0];
+                        if (!existSender) return ctx.reply(`🗿 ${sender.first_name}, ты на мели (${symbol} 0 шт.)`);
+                        const inventorySender = existSender.inventory;
+                        if (!inventorySender[item]) return ctx.reply(`🗿 ${sender.first_name}, ты на мели (${symbol} 0 шт.)`);
+                        inventorySender[item] -= 1;
+                        await room.updateOne({room: conversationID, 'list.user': existSender.user}, {
+                            $set: {
+                                'list.$.inventory': inventorySender
+                            }
+                        }).then(async () => {
+                            if (!existSender.respect) {
+                                await room.updateOne({room: conversationID, 'list.user': existSender.user}, {
+                                    $set: {
+                                        'list.$.respect': 0
+                                    }
+                                })
+                            }
+                            if (!existSender.report) {
+                                await room.updateOne({room: conversationID, 'list.user': existSender.user}, {
+                                    $set: {
+                                        'list.$.report': 0
+                                    }
+                                })
+                            }
+                            if (!existUser.report) {
+                                await room.updateOne({room: conversationID, 'list.user': existUser.user}, {
+                                    $set: {
+                                        'list.$.report': 0
+                                    }
+                                })
+                            }
+                            if (!existUser.respect) {
+                                await room.updateOne({room: conversationID, 'list.user': existUser.user}, {
+                                    $set: {
+                                        'list.$.respect': 0
+                                    }
+                                })
+                            }
+                            const user = await getUser(payload.user);
+                            const owner = await getUser(existSender.user);
+                            const ownerGen = await getUser(existSender.user, 'gen');
+                            
+                            if (existSender.user === payload.user) {
+                                callbackSelf.call(null, existUser, user);
+                            } else {
+                                callback.call(
+                                    null, existSender,
+                                    existUser, user, 
+                                    owner, ownerGen
+                                ); 
+                            }
+                        })
+                    } catch(err) {
+                        console.error(err);
+                    }
+                }
+                if (payload.action === 'throwGlove') {
+                    const spam = await antiSpam(ctx, 3);
+                    if (spam) return;
+                    await useLoot('glove', '🥊', async (owner, user, existUser, sender, senderGen) => {
+                        if (!user) {
+                            return ctx.reply(`🤧 ${existUser.first_name} получил в тыкву от ${senderGen.first_name}\n😩 ${owner.firstName} ничего с этого не получил`);
+                        }
+                        if (user.buff.weed === true && user.inventory.weed) {
+                            await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                $set: {
+                                    'list.$.respect': user.respect + 1,
+                                    'list.$.status': getStatus(user.respect + 1, user.report, existUser),
+                                    'list.$.inventory.weed': user.inventory.weed - 1
+                                }
+                            })
+                            await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                $set: {
+                                    'list.$.buff.weed': true
+                                }
+                            })
+                            const userGen = await getUser(user.user, 'gen');
+                            return ctx.reply(`${owner.firstName} принял растафарай от ${userGen.first_name}\n${user.firstName} угостил травкой 🌿🤙\nРебята знатно подули...`);
+                        }
+                        if (user.buff.weed) {
+                            await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                $set: {
+                                    'list.$.buff.weed': false
+                                }
+                            })
+                            const userGen = await getUser(user.user, 'gen');
+                            return ctx.reply(`😇 ${owner.firstName} получил духовное просветление от ${userGen.first_name}\n${user.firstName} так долго рассказывал про мир во всем мире, что его аж отпустило`);
+                        }
+                        if (owner.buff.weed) {
+                            await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                $set: {
+                                    'list.$.buff.weed': false
+                                }
+                            })
+                            return ctx.reply(`${owner.firstName}, ты не можешь драться из-за духовного просветления\n😴 ${owner.firstName} ушёл отсыпаться...`);
+                        }
+                        if (user.buff.beer && !owner.buff.beer) {
+                            const userGen = await getUser(user.user, 'gen');
+                            await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                $set: {
+                                    'list.$.report': owner.report + 1,
+                                    'list.$.status': getStatus(owner.respect, owner.report + 1, sender)
+                                }
+                            })
+                            await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                $set: {
+                                    'list.$.buff.beer': false,
+                                    'list.$.respect': user.respect + 1,
+                                    'list.$.status': getStatus(user.respect + 1, user.report, existUser)
+
+                                }
+                            })
+                            return ctx.reply(`🤧 ${owner.firstName} получил в пузо от пьяного-мастера ${userGen.first_name}\nПацаны с района дали дизреспект 👎\n${user.firstName} получил респект 🤙`);
+                        }
+                        if (!user.buff.beer && owner.buff.beer) {
+                            await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                $set: {
+                                    'list.$.report': user.report + 1,
+                                    'list.$.status': getStatus(user.respect, user.report + 1, existUser)
+                                }
+                            })
+                            await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                $set: {
+                                    'list.$.buff.beer': false,
+                                    'list.$.respect': owner.respect + 1,
+                                    'list.$.status': getStatus(owner.respect + 1, owner.report, sender)
+                                }
+                            })
+                            return ctx.reply(`🤧 ${user.firstName} получил в пузо от пьяного-мастера ${senderGen.first_name}\nПацаны с района дали дизреспект 👎\n${owner.firstName} получил респект 🤙`);
+                        }
+                        if (user.buff.beer === true && owner.buff.beer === true) {
+                            await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                $set: {
+                                    'list.$.buff.beer': false,
+                                }
+                            })
+                            await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                $set: {
+                                    'list.$.buff.beer': false,
+                                }
+                            })
+                            return ctx.reply(`${user.firstName} и ${owner.firstName} бухие орали матом и 🥊 дрались под окнами\n👵 Бабка вызвала сотрудников 👮‍♀🚔\nИм пришлось скрыться с места происшествия...`);
+                        }
+                        if (!user.respect) {
+                            if (user.inventory.glove) {
+                                await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                    $set: {
+                                        'list.$.inventory.glove': user.inventory.glove - 1,
+                                    }
+                                }).then(() => {
+                                    return ctx.reply(`Началась суета...у обоих есть 🥊\nНо к сожалению, махач разняли сотрудники 👮‍♀🚔`);
+                                })
+                            }
+                            return ctx.reply(`🤧 ${user.firstName} получил в тыкву от ${senderGen.first_name}\n😩 ${owner.firstName} ничего с этого не получил`);
+                        }
+                        if (user.inventory.glove) {
+                            const countOwner = getRandomInt(0, 2) * owner.inventory.glove;
+                            const countUser = getRandomInt(0, 2) * user.inventory.glove;
+                            async function userWin() {
+                                await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                    $set: {
+                                        'list.$.inventory.glove': user.inventory.glove - 1,
+                                        'list.$.respect': user.respect + 1,
+                                        'list.$.status': getStatus(user.respect + 1, user.report, existUser)
+                                    }
+                                })
+                                await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                    $set: {
+                                        'list.$.report': owner.report + 1,
+                                        'list.$.status': getStatus(owner.respect, owner.respect + 1, sender)
+                                    }
+                                }).then(() => {
+                                    return ctx.reply(`Началась суета...у обоих есть 🥊\n🤧 ${owner.firstName} проиграл в драке... 👎\n😎 ${user.firstName} получил респект 🤙`);
+                                })
+                            }
+                            if (countOwner > countUser) {
+                                await ownerWin();
+                            } else if (countOwner < countUser) {
+                                await userWin()
+                            } else {
+                                if (getRandomInt(0, 2) === 0) {
+                                    await ownerWin();
+                                } else {
+                                    await userWin()
+                                }
+                            }
+                        } else {
+                            await ownerWin(`🤧 ${user.firstName} получил в тыкву от ${senderGen.first_name}\n😎 ${owner.firstName} отжал респект 🤙`);
+                        }
+                        async function ownerWin(mes = null) {
+                            await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                $set: {
+                                    'list.$.respect': owner.respect + 1,
+                                    'list.$.status': getStatus(owner.respect + 1, owner.report, sender)
+                                }
+                            })
+                            await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                $set: {
+                                    'list.$.inventory.glove': mes ? 0 : user.inventory.glove - 1,
+                                    'list.$.respect': user.respect - 1,
+                                    'list.$.status': getStatus(user.respect - 1, user.report, existUser)
+                                }
+                            }).then(() => {
+                                return ctx.reply(mes || `Началась суета...у обоих есть 🥊\n🤧 ${user.firstName} получил в тыкву от ${senderGen.fisrt_name} 👎\n😎 ${owner.firstName} отжал респект 🤙`)
+                            })
+                        }
+                    }, async (existUser, user) => {
+                        await room.updateOne({room: conversationID, 'list.user': existUser.user}, {
+                            $set: {
+                                'list.$.report': existUser.report + 1,
+                                'list.$.status': getStatus(existUser.respect, existUser.report + 1, user)
+                            }
+                        }).then(() => {
+                            return ctx.reply(`🤪 ${user.first_name} ${user.sex === 2 ? 'настучал' : 'настучала'} себе по морде 👎\n🤕🚑 Увезли в дурку...`)
+                        }) 
+                    })
+                }
+                if (payload.action === 'throwBeer') {
+                    const spam = await antiSpam(ctx, 3);
+                    if (spam) return;
+                    await useLoot('beer', '🍻', async (owner, user, existUser, sender, senderGen) => {
+                        if (!user) {
+                            return ctx.reply(`😕 ${existUser.first_name} отказался от 🍻 пивасика ${senderGen.first_name}`);
+                        }
+                        if (user.inventory.beer) {
+                            if (owner.buff.beer && !user.buff.beer) {
+                                await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': false,
+                                        'list.$.buff.beer': false,
+                                        'list.$.report': owner.report + 1,
+                                        'list.$.status': getStatus(owner.respect, owner.report + 1, sender),
+                                    }
+                                })
+                                await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': false,
+                                        'list.$.buff.beer': true,
+                                        'list.$.inventory.beer': user.inventory.beer - 1,
+                                    }
+                                })
+                                return ctx.reply(`У каждого при себе 🍻\n🥴 ${owner.firstName} и ${user.firstName} нажрались\n🤢 ${owner.firstName} перепил\n🤮 наблювал в беседе 👎`)
+                            }
+                            if (!owner.buff.beer && user.buff.beer) {
+                                await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': false,
+                                        'list.$.buff.beer': false,
+                                        'list.$.report': user.report + 1,
+                                        'list.$.status': getStatus(user.respect, user.report + 1, existUser),
+                                        'list.$.inventory.beer': user.inventory.beer - 1,
+                                    }
+                                })
+                                await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': false,
+                                        'list.$.buff.beer': true,
+                                    }
+                                })
+                                return ctx.reply(`У каждого при себе 🍻\n🥴 ${owner.firstName} и ${user.firstName} нажрались\n🤢 ${user.firstName} перепил\n🤮 наблювал в беседе 👎`)
+                            }
+                            if (owner.buff.beer === true && user.buff.beer === true) {
+                                await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': false,
+                                        'list.$.buff.beer': false,
+                                        'list.$.report': user.report + 1,
+                                        'list.$.status': getStatus(user.respect, user.report + 1, existUser),
+                                        'list.$.inventory.beer': user.inventory.beer - 1,
+                                    }
+                                })
+                                await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': false,
+                                        'list.$.buff.beer': false,
+                                        'list.$.report': owner.report + 1,
+                                        'list.$.status': getStatus(owner.respect, owner.report + 1, sender),
+                                    }
+                                })
+                                return ctx.reply(`У каждого при себе 🍻\n🥴 ${owner.firstName} и ${user.firstName} нажрались\n🤢 Ребята перепили\n🤮 наблювали в беседе 👎`)
+                            }
+                            await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                $set: {
+                                    'list.$.buff.weed': false,
+                                    'list.$.buff.beer': true,
+                                    'list.$.inventory.beer': user.inventory.beer - 1,
+                                }
+                            })
+                            await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                $set: {
+                                    'list.$.buff.weed': false,
+                                    'list.$.buff.beer': true,
+                                }
+                            })
+                            return ctx.reply(`У каждого при себе 🍻\n🥴 ${owner.firstName} и ${user.firstName} нажрались`)
+                        }
+                        if (user.respect) {
+                            await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                $set: {
+                                    'list.$.respect': user.respect - 1,
+                                    'list.$.status': getStatus(user.respect - 1, user.report, existUser),
+                                    'list.$.inventory.beer': user.inventory.beer + 1
+                                }
+                            })
+                            await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                $set: {
+                                    'list.$.respect': owner.respect + 1,
+                                    'list.$.status': getStatus(owner.respect + 1, owner.report, sender),
+                                }
+                            })
+                            return ctx.reply(`🤑 ${user.firstName} купил 🍻 у ${senderGen.first_name} за респект`);
+                        } else {
+                            if (user.buff.beer) {
+                                await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': false,
+                                        'list.$.buff.beer': false,
+                                        'list.$.report': user.report + 1,
+                                        'list.$.status': getStatus(user.respect + 1, user.report + 1, existUser),
+                                    }
+                                })
+                                return ctx.reply(`🥴 ${user.firstName} знатно набухался у ${senderGen.first_name}\n🤮 ${user.firstName} наблювал на хате 👎`);
+                            } else {
+                                await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': false,
+                                        'list.$.buff.beer': true
+                                    }
+                                })
+                                return ctx.reply(`🥴 ${user.firstName} бесплатно напился у ${senderGen.first_name}`);
+                            }
+                        }
+                    }, async (existUser, user) => {
+                        if (existUser.buff.beer) {
+                            await room.updateOne({room: conversationID, 'list.user': existUser.user}, {
+                                $set: {
+                                    'list.$.report': existUser.report + 1,
+                                    'list.$.status': getStatus(existUser.respect, existUser.report + 1, user),
+                                    'list.$.buff.weed': false,
+                                    'list.$.buff.beer': false,
+                                }
+                            })
+                            return ctx.reply(`🤢 ${existUser.firstName} перепил пива\n🤮 наблювал в беседе 👎`) 
+                        } else {
+                            await room.updateOne({room: conversationID, 'list.user': existUser.user}, {
+                                $set: {
+                                    'list.$.buff.beer': true,
+                                    'list.$.buff.weed': false,
+                                }
+                            })
+                            return ctx.reply(`🍻 ${existUser.firstName} бахнул хорошего пивка\n🥴 В драке теперь будет чувстовать себя бодро`)
+                        }
+                    })
+                }
+                if (payload.action === 'throwWeed') {
+                    const spam = await antiSpam(ctx, 3);
+                    if (spam) return;
+                    await useLoot('weed', '🌿', async (owner, user, existUser, sender, senderGen) => {
+                        if (!user) {
+                            return ctx.reply(`😕 ${existUser.first_name} отказался от 🌿 стаффа ${senderGen.first_name}`);
+                        }
+                        if (user.inventory.weed) {
+                            if (owner.buff.weed && !user.buff.weed) {
+                                await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': false,
+                                        'list.$.buff.beer': false,
+                                    }
+                                })
+                                await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': true,
+                                        'list.$.buff.beer': false,
+                                        'list.$.inventory.weed': user.inventory.weed - 1,
+                                    }
+                                })
+                                return ctx.reply(`У каждого при себе 🌿\n🤤 ${owner.firstName} и ${user.firstName} начали дуть\n${owner.firstName} перекурил и вырубился 😴 спать\n😟 снялись все бафы`)
+                            }
+                            if (!owner.buff.weed && user.buff.weed) {
+                                await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': false,
+                                        'list.$.buff.beer': false,
+                                        'list.$.inventory.weed': user.inventory.weed - 1,
+                                    }
+                                })
+                                await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': true,
+                                        'list.$.buff.beer': false,
+                                    }
+                                })
+                                return ctx.reply(`У каждого при себе 🌿\n🤤 ${owner.firstName} и ${user.firstName} начали дуть\n${user.firstName} перекурил и вырубился 😴 спать\n😟 снялись все бафы`)
+                            }
+                            if (owner.buff.weed === true && user.buff.weed === true) {
+                                await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': false,
+                                        'list.$.buff.beer': false,
+                                        'list.$.inventory.weed': user.inventory.weed - 1,
+                                    }
+                                })
+                                await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': false,
+                                        'list.$.buff.beer': false,
+                                    }
+                                })
+                                return ctx.reply(`У каждого при себе 🌿\n🤤 ${owner.firstName} и ${user.firstName} начали дуть\nРебят сильно накумарило, и они вырубились 😴 спать\n😟 у них снялись все бафы`)
+                            }
+                            await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                $set: {
+                                    'list.$.buff.weed': true,
+                                    'list.$.buff.beer': false,
+                                    'list.$.inventory.weed': user.inventory.weed - 1,
+                                }
+                            })
+                            await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                $set: {
+                                    'list.$.buff.weed': true,
+                                    'list.$.buff.beer': false,
+                                }
+                            })
+                            return ctx.reply(`У каждого при себе 🌿\n🤤 ${owner.firstName} и ${user.firstName} сладко дунули`)
+                        }
+                        
+                        if (user.respect) {
+                            await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                $set: {
+                                    'list.$.respect': user.respect - 1,
+                                    'list.$.status': getStatus(user.respect - 1, user.report, existUser),
+                                    'list.$.inventory.weed': user.inventory.weed + 1
+                                }
+                            })
+                            await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                $set: {
+                                    'list.$.respect': owner.respect + 1,
+                                    'list.$.status': getStatus(owner.respect + 1, owner.report, sender),
+                                }
+                            })
+                            return ctx.reply(`🤑 ${user.firstName} купил 🌿 стафф у ${senderGen.first_name} за респект`);
+                        } else {
+                            if (user.buff.weed) {
+                                await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': false,
+                                        'list.$.buff.beer': false
+                                    }
+                                })
+                                return ctx.reply(`🥳 ${user.firstName} знатно подкурился у ${senderGen.first_name}\n${user.firstName} не выдержил, и вырубился 😴 спать\n😟 снялись все бафы`);
+                            } else {
+                                await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                    $set: {
+                                        'list.$.buff.weed': true,
+                                        'list.$.buff.beer': false
+                                    }
+                                })
+                                return ctx.reply(`🥳 ${user.firstName} бесплатно подкурился у ${senderGen.first_name}`);
+                            }
+                        }
+                    }, async (existUser, user) => {
+                        if (existUser.buff.weed) {
+                            await room.updateOne({room: conversationID, 'list.user': existUser.user}, {
+                                $set: {
+                                    'list.$.buff.weed': false,
+                                    'list.$.buff.beer': false,
+                                }
+                            })
+                            return ctx.reply(`🤤 ${existUser.firstName} перекурил, и вырубился 😴 спать\n😟 снялись все бафы`) 
+                        } else {
+                            await room.updateOne({room: conversationID, 'list.user': existUser.user}, {
+                                $set: {
+                                    'list.$.buff.beer': false,
+                                    'list.$.buff.weed': true,
+                                }
+                            })
+                            return ctx.reply(`😜 ${existUser.firstName} дунул хорошего 🌿 стаффа\n☀ принял растафарай`)
+                        }
+                    })
+                }
                 // Русская рулетка ------------------------------------------------------------------
                 if (payload.action === 'takeRoulette') {
                     try {
