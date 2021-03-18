@@ -1256,7 +1256,7 @@ async function start() {
                                     }
                                 })
                             }
-                            return ctx.reply(`🙊 ${user.first_name}, ${user.sex === 2 ? 'залутал' : 'залутала'} предмет (+1)`)
+                            return ctx.reply(`🙊 ${user.first_name} ${user.sex === 2 ? 'залутал' : 'залутала'} предмет (+1)`)
                         }
                     } 
                 }
