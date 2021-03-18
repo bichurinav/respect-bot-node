@@ -21,7 +21,8 @@ const roomSchema = new Schema({
                 glove: Number,
                 beer: Number,
                 weed: Number
-            }
+            },
+            pictures: Array
         }
     ],
     roulette: {

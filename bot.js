@@ -14,7 +14,7 @@ const axios = require('axios');
 const config = require('config');
 const fs = require('fs');
 
-const token = config.get('token_dev');
+const token = config.get('token');
 const dbURL = config.get('database');
 const bot = new VK(token);
 bot.use(session.middleware());
@@ -32,12 +32,15 @@ const arItems = [
 ]
 
 const arLoot = [
+    null,
     [
-        arItems[0], arItems[1], arItems[2]
+        arItems[1], arItems[0],
+        arItems[1], arItems[0],
+        arItems[2], arItems[0],
+        arItems[1], arItems[0],
+        arItems[1], arItems[2]
     ],
-    [
-        arItems[0], arItems[1], arItems[2]
-    ],
+    null,
 ]
 
 async function start() {
@@ -1179,69 +1182,81 @@ async function start() {
                     const conversation = await bot.execute('messages.getConversationMembers', {
                         peer_id: ctx.message.peer_id,
                     })
-                    //console.log(attachemnt.photo.id);
                     if (conversation.profiles.length > 1) {
                         let randomItem = arLoot[getRandomInt(0, arLoot.length)];
-                        if (randomItem !== null) {
-                            const user = await getUser(ctx.message.from_id);
-                            const roomID = ctx.message.peer_id;
-                            randomItem = randomItem[getRandomInt(0, randomItem.length)]
+                        const user = await getUser(ctx.message.from_id);
+                        const roomID = ctx.message.peer_id;
+                        let existRoom = await room.findOne({room: roomID});
+                        let existUser = existRoom.list.filter((el) => el.user === user.screen_name)[0]
+
+                        if (existUser) {
+                            const pictures = existUser.pictures || [];
+                            if (pictures.includes(attachemnt.photo.id)) {
+                                return
+                            }
+                            pictures.push(attachemnt.photo.id);
+                            await room.updateOne({room: roomID, 'list.user': user.screen_name}, {
+                                $set: {
+                                    'list.$.pictures': pictures
+                                }
+                            })
+                        } else {
                             let existRoom = await room.findOne({room: roomID});
                             if (!existRoom) {
                                 await room.create({
                                     room: roomID,
                                     list: []
                                 })
-                                existRoom = await room.findOne({room: roomID});
                             }
-                            const hasUser = existRoom.list.filter(el => el.user === user.screen_name)[0];
-                            if (hasUser) {
-                                const inventory = {
-                                    glove: hasUser.inventory.glove || 0,
-                                    beer: hasUser.inventory.beer || 0,
-                                    weed: hasUser.inventory.weed || 0
+                            await room.updateOne({room: roomID}, {
+                                $push: {
+                                    list: {
+                                        user: user.screen_name,
+                                        firstName: user.first_name,
+                                        lastName: user.last_name,
+                                        respect: 0,
+                                        report: 0,
+                                        buff: {
+                                            weed: false,
+                                            beer: false
+                                        },
+                                        inventory: {
+                                            glove: 0,
+                                            beer: 0,
+                                            weed: 0
+                                        },
+                                        pictures: [attachemnt.photo.id]
+                                    }
                                 }
-                                inventory[randomItem.name] += 1;
-                                if (typeof hasUser.buff.beer !== 'boolean') {
-                                    await room.updateOne({room: roomID, 'list.user': user.screen_name}, {
-                                        $set: {
-                                            'list.$.buff': {
-                                                weed: false,
-                                                beer: false
-                                            },
-                                        }
-                                    })
+                            })
+                        }
+                         
+                        if (randomItem !== null) {
+                            randomItem = randomItem[getRandomInt(0, randomItem.length)]
+                            existRoom = await room.findOne({room: roomID, 'list.user': user.screen_name});
+                            existUser = existRoom.list.filter((el) => el.user === user.screen_name)[0]
+                            const inventory = {
+                                glove: existUser.inventory.glove || 0,
+                                beer: existUser.inventory.beer || 0,
+                                weed: existUser.inventory.weed || 0
+                            }
+                            inventory[randomItem.name] += 1;
+                            await room.updateOne({room: roomID, 'list.user': user.screen_name}, {
+                                $set: {
+                                    'list.$.inventory': inventory,
                                 }
+                            })
+                            if (typeof existUser.buff.weed !== 'boolean') {
                                 await room.updateOne({room: roomID, 'list.user': user.screen_name}, {
                                     $set: {
-                                        'list.$.inventory': inventory,
-                                    }
-                                })
-                            } else {
-                                const inventory = {
-                                    glove: 0,
-                                    beer: 0,
-                                    weed: 0,
-                                }
-                                inventory[randomItem.name] = 1;
-                                await room.updateOne({room: roomID}, {
-                                    $push: {
-                                        list: {
-                                            user: user.screen_name,
-                                            firstName: user.first_name,
-                                            lastName: user.last_name,
-                                            respect: 0,
-                                            report: 0,
-                                            buff: {
-                                                weed: false,
-                                                beer: false
-                                            },
-                                            inventory
-                                        }
+                                        'list.$.buff':{
+                                            weed: false,
+                                            beer: false, 
+                                        },
                                     }
                                 })
                             }
-                            ctx.reply(`🙊 ${user.first_name}, ${user.sex === 2 ? 'залутал' : 'залутала'} предмет (+1)`)
+                            return ctx.reply(`🙊 ${user.first_name}, ${user.sex === 2 ? 'залутал' : 'залутала'} предмет (+1)`)
                         }
                     } 
                 }
@@ -1410,6 +1425,14 @@ async function start() {
                         if (!user) {
                             return ctx.reply(`🤧 ${existUser.first_name} получил в тыкву от ${senderGen.first_name}\n😩 ${owner.firstName} ничего с этого не получил`);
                         }
+                        if (owner.buff.weed) {
+                            await room.updateOne({room: conversationID, 'list.user': owner.user}, {
+                                $set: {
+                                    'list.$.buff.weed': false
+                                }
+                            })
+                            return ctx.reply(`${owner.firstName}, ты не можешь драться из-за духовного просветления\n😴 ${owner.firstName} ушёл отсыпаться...`);
+                        }
                         if (user.buff.weed === true && user.inventory.weed) {
                             await room.updateOne({room: conversationID, 'list.user': user.user}, {
                                 $set: {
@@ -1434,14 +1457,6 @@ async function start() {
                             })
                             const userGen = await getUser(user.user, 'gen');
                             return ctx.reply(`😇 ${owner.firstName} получил духовное просветление от ${userGen.first_name}\n${user.firstName} так долго рассказывал про мир во всем мире, что его аж отпустило`);
-                        }
-                        if (owner.buff.weed) {
-                            await room.updateOne({room: conversationID, 'list.user': owner.user}, {
-                                $set: {
-                                    'list.$.buff.weed': false
-                                }
-                            })
-                            return ctx.reply(`${owner.firstName}, ты не можешь драться из-за духовного просветления\n😴 ${owner.firstName} ушёл отсыпаться...`);
                         }
                         if (user.buff.beer && !owner.buff.beer) {
                             const userGen = await getUser(user.user, 'gen');
@@ -1550,7 +1565,7 @@ async function start() {
                                     'list.$.status': getStatus(user.respect - 1, user.report, existUser)
                                 }
                             }).then(() => {
-                                return ctx.reply(mes || `Началась суета...у обоих есть 🥊\n🤧 ${user.firstName} получил в тыкву от ${senderGen.fisrt_name} 👎\n😎 ${owner.firstName} отжал респект 🤙`)
+                                return ctx.reply(mes || `Началась суета...у обоих есть 🥊\n🤧 ${user.firstName} получил в тыкву от ${senderGen.first_name} 👎\n😎 ${owner.firstName} отжал респект 🤙`)
                             })
                         }
                     }, async (existUser, user) => {
@@ -1570,6 +1585,22 @@ async function start() {
                     await useLoot('beer', '🍻', async (owner, user, existUser, sender, senderGen) => {
                         if (!user) {
                             return ctx.reply(`😕 ${existUser.first_name} отказался от 🍻 пивасика ${senderGen.first_name}`);
+                        }
+                        if (user.buff.beer) {
+                            const answer = [true, false];
+                            if (answer[getRandomInt(0, 2)] === false) {
+                                return ctx.reply(`🥴 ${existUser.first_name} отказался от 🍻 пивасика ${senderGen.first_name}\nВидимо, уже пьяненький...`);
+                            } else {
+                                await room.updateOne({room: conversationID, 'list.user': user.user}, {
+                                    $set: {
+                                        'list.$.report': user.report + 1,
+                                        'list.$.status': getStatus(user.respect, user.report + 1, existUser),
+                                        'list.$.buff.weed': false,
+                                        'list.$.buff.beer': false,
+                                    }
+                                })
+                                return ctx.reply(`🥴 ${user.firstName} согласился ещё бахнуть\n🤢 ${user.firstName} перепил пива\n🤮 наблювал в беседе 👎`) 
+                            }
                         }
                         if (user.inventory.beer) {
                             if (owner.buff.beer && !user.buff.beer) {
@@ -1697,7 +1728,7 @@ async function start() {
                                     'list.$.buff.weed': false,
                                 }
                             })
-                            return ctx.reply(`🍻 ${existUser.firstName} бахнул хорошего пивка\n🥴 В драке теперь будет чувстовать себя бодро`)
+                            return ctx.reply(`🍻 ${existUser.firstName} бахнул хорошего пивка\n🥴 В драке теперь будет чувствовать себя бодро`)
                         }
                     })
                 }
