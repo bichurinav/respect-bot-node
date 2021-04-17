@@ -1205,7 +1205,7 @@ async function start() {
             const picture = await getPictureFromAlbum(ctx, 'ляпин');
             ctx.reply('', picture);
         });
-        bot.command(/^(аболтус|зига)$/i, async (ctx) => {
+        bot.command(/^(аболтус|зига|сынуля)$/i, async (ctx) => {
             const spam = await antiSpam(ctx, 5);
             if (spam) return;
             const picture = await getPictureFromAlbum(ctx, 'аболтус');
