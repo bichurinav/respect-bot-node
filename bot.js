@@ -1205,6 +1205,18 @@ async function start() {
             const picture = await getPictureFromAlbum(ctx, 'ляпин');
             ctx.reply('', picture);
         });
+        bot.command(/^(аболтус|зига)$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'ss');
+            ctx.reply('', picture);
+        });
+        bot.command(/^(гуль|sf|сф)$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'аболтус');
+            ctx.reply('', picture);
+        });
         //==========================================================================================
         // Случайный Gachimuchi
         bot.command(/(гачи|gachi)/i, async (ctx) => {
@@ -1559,7 +1571,7 @@ async function start() {
                 } else {
                     dropUser = ctx.message.fwd_messages[0];
                     if (!dropUser)
-                        throw '&#9762; Перешлите сообщение, или \n !zxc @id <можно указать причину>';
+                        throw '&#9762; Перешлите сообщение, или \n !zxc @id';
                     dropUser = await getUser(dropUser.from_id);
                 }
 
