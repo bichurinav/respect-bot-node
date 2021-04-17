@@ -1208,13 +1208,13 @@ async function start() {
         bot.command(/^(аболтус|зига)$/i, async (ctx) => {
             const spam = await antiSpam(ctx, 5);
             if (spam) return;
-            const picture = await getPictureFromAlbum(ctx, 'ss');
+            const picture = await getPictureFromAlbum(ctx, 'аболтус');
             ctx.reply('', picture);
         });
         bot.command(/^(гуль|sf|сф)$/i, async (ctx) => {
             const spam = await antiSpam(ctx, 5);
             if (spam) return;
-            const picture = await getPictureFromAlbum(ctx, 'аболтус');
+            const picture = await getPictureFromAlbum(ctx, 'гуль');
             ctx.reply('', picture);
         });
         //==========================================================================================
