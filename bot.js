@@ -1205,6 +1205,12 @@ async function start() {
             const picture = await getPictureFromAlbum(ctx, 'ляпин');
             ctx.reply('', picture);
         });
+        bot.command(/^!вовёр$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'вовёр');
+            ctx.reply('Вовёр, С Днём Рождения! 🍍', picture);
+        });
         bot.command(/^(аболтус|зига|сынуля)$/i, async (ctx) => {
             const spam = await antiSpam(ctx, 5);
             if (spam) return;
@@ -1687,10 +1693,11 @@ async function start() {
                                                                     },
                                                                 }
                                                             );
-                                                            const imgBoom = await getPictureFromAlbum(
-                                                                ctx,
-                                                                'boom'
-                                                            );
+                                                            const imgBoom =
+                                                                await getPictureFromAlbum(
+                                                                    ctx,
+                                                                    'boom'
+                                                                );
                                                             ctx.reply(
                                                                 `${existSender.firstName} получил респект 🤙 (+1)`,
                                                                 imgBoom
@@ -1710,10 +1717,11 @@ async function start() {
                                                                     },
                                                                 }
                                                             );
-                                                            const imgPudge = await getPictureFromAlbum(
-                                                                ctx,
-                                                                'zxc-pudge'
-                                                            );
+                                                            const imgPudge =
+                                                                await getPictureFromAlbum(
+                                                                    ctx,
+                                                                    'zxc-pudge'
+                                                                );
                                                             ctx.reply(
                                                                 `${existSender.firstName} поймал хук 👎 (-1), гулёныш был наказан`,
                                                                 imgPudge
@@ -3216,9 +3224,10 @@ async function start() {
                             currentRoom = await room.findOne({
                                 room: conversationID,
                             });
-                            const notShotPlayers = currentRoom.roulette.players.filter(
-                                (el) => !el.shot
-                            );
+                            const notShotPlayers =
+                                currentRoom.roulette.players.filter(
+                                    (el) => !el.shot
+                                );
 
                             if (currentPlayer.bullet !== currentBullet) {
                                 ctx.reply(
@@ -3254,23 +3263,26 @@ async function start() {
                                     );
                                 }
                             } else {
-                                const arPlayersExceptCurrent = currentRoom.roulette.players.filter(
-                                    (el) => el.user != userID
-                                );
+                                const arPlayersExceptCurrent =
+                                    currentRoom.roulette.players.filter(
+                                        (el) => el.user != userID
+                                    );
                                 await room.updateOne(
                                     { room: conversationID },
                                     {
                                         $set: {
-                                            'roulette.players': arPlayersExceptCurrent,
+                                            'roulette.players':
+                                                arPlayersExceptCurrent,
                                         },
                                     }
                                 );
                                 currentRoom = await room.findOne({
                                     room: conversationID,
                                 });
-                                const notShotPlayers = currentRoom.roulette.players.filter(
-                                    (el) => !el.shot
-                                );
+                                const notShotPlayers =
+                                    currentRoom.roulette.players.filter(
+                                        (el) => !el.shot
+                                    );
 
                                 ctx.reply(`${user.first_name} умер... ⚰ 😢😭`);
 
@@ -3336,10 +3348,11 @@ async function start() {
                                         );
                                     }
                                     if (currentRoom.roulette.top.length > 0) {
-                                        const existPlayerInTop = currentRoom.roulette.top.filter(
-                                            (player) =>
-                                                player.user === winner.user
-                                        )[0];
+                                        const existPlayerInTop =
+                                            currentRoom.roulette.top.filter(
+                                                (player) =>
+                                                    player.user === winner.user
+                                            )[0];
                                         if (existPlayerInTop) {
                                             await room.updateOne(
                                                 {
@@ -3510,8 +3523,7 @@ async function start() {
                                 Markup.button({
                                     action: {
                                         type: 'open_link',
-                                        link:
-                                            'https://vk.com/im?media=&sel=-201031864',
+                                        link: 'https://vk.com/im?media=&sel=-201031864',
                                         label: 'Написать',
                                     },
                                 }),
