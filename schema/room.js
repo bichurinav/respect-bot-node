@@ -15,15 +15,15 @@ const roomSchema = new Schema({
             fail: Array,
             buff: {
                 beer: Boolean,
-                weed: Boolean
+                weed: Boolean,
             },
             inventory: {
                 glove: Number,
                 beer: Number,
-                weed: Number
+                weed: Number,
             },
-            pictures: Array
-        }
+            pictures: Array,
+        },
     ],
     roulette: {
         gameStarted: Boolean,
@@ -32,15 +32,15 @@ const roomSchema = new Schema({
             {
                 user: String,
                 bullet: Number,
-                shot: Boolean
-            }
+                shot: Boolean,
+            },
         ],
         top: [
             {
                 user: String,
-                score: Number
-            }
-        ]
+                score: Number,
+            },
+        ],
     },
 });
 

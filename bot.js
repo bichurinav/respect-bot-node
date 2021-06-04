@@ -9,6 +9,7 @@ const Session = require('node-vk-bot-api/lib/session');
 const session = new Session();
 const mongoose = require('mongoose');
 const room = require('./schema/room');
+const { challenges, challengesMultiple } = require('./schema/challenges');
 const iconv = require('iconv-lite');
 const axios = require('axios');
 const config = require('config');
@@ -806,6 +807,27 @@ async function start() {
             );
         });
         //==========================================================================================
+        // CHALLENGES
+
+        async function getChallenges(model) {
+            return await model.find();
+        }
+
+        function sendRandomChallenge(ctx, arr, mark) {
+            if (arr.length < 1) {
+                return ctx.reply('Челленджей нету :(');
+            }
+            const randomChallenge = arr[getRandomInt(0, arr.length)];
+            ctx.reply(`${mark} ${randomChallenge.text}`);
+        }
+        bot.command(/^!do$/, async (ctx) => {
+            const arChallenges = await getChallenges(challengesMultiple);
+            sendRandomChallenge(ctx, arChallenges, '🍏');
+        });
+        bot.command(/^!do solo$/, async (ctx) => {
+            const arChallenges = await getChallenges(challenges);
+            sendRandomChallenge(ctx, arChallenges, '🍎');
+        });
         // Убрать у бота кнопки
         bot.command(/^!btn\sdel$/, async (ctx) => {
             function delButtons(ctx) {

@@ -1,6 +1,6 @@
 {
   "token": "3ec3b314f796362aeb91c65e4bab6a0cb8239ae9c5fb935fb26e7437e8a93817541ecec224eb6e459f3c4",
-  "token_dev": "fc9ee659a314dbe3e990809eeca5b955016757f9bdfdc691962506b5e42c64d94ab60691c9b3898bd42d7",
+  "token_dev": "401f26eb365aa3f630db474e30371a5b39c464967d7476c4c4201b04836218730e89aa84243627a4c1ee5",
   "access_token": "829f1bdaabcfb4a15034744740a2ddcd039157ac9c64ab3b4e5949fce10f6cb9395ec2a5d2e032af4fd32",
   "database": "mongodb+srv://bichurinet:Ab2507011097@respect-bot.o6dm1.mongodb.net/respect-bot?retryWrites=true&w=majority"
 }
