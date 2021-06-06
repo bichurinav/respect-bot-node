@@ -1239,7 +1239,7 @@ async function start() {
             const picture = await getPictureFromAlbum(ctx, 'дэнч');
             ctx.reply('Даня, С Днём Рождения! 🍺', picture);
         });
-        bot.command(/^!(душно|душнила)$/i, async (ctx) => {
+        bot.command(/^(душно|душнила)$/i, async (ctx) => {
             const spam = await antiSpam(ctx, 5);
             if (spam) return;
             const picture = await getPictureFromAlbum(ctx, 'душно');
