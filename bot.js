@@ -1231,7 +1231,13 @@ async function start() {
             const spam = await antiSpam(ctx, 5);
             if (spam) return;
             const picture = await getPictureFromAlbum(ctx, 'вовёр');
-            ctx.reply('Вовёр, С Днём Рождения! 🍍', picture);
+            ctx.reply('Вовёр 🍍', picture);
+        });
+        bot.command(/^!дэнч$/i, async (ctx) => {
+            const spam = await antiSpam(ctx, 5);
+            if (spam) return;
+            const picture = await getPictureFromAlbum(ctx, 'дэнч');
+            ctx.reply('Даня, С Днём Рождения! 🍺', picture);
         });
         bot.command(/^(аболтус|зига|сынуля)$/i, async (ctx) => {
             const spam = await antiSpam(ctx, 5);
